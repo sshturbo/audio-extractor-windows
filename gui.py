@@ -66,6 +66,8 @@ class MainWindow(QMainWindow):
         self.create_sidebar()
         self.setup_ui()
         self.setStyleSheet(self.get_styles())
+        # Adicionar menu de projetos
+        self.setup_menu()
 
     def setup_ui(self):
         # Container principal
@@ -79,8 +81,10 @@ class MainWindow(QMainWindow):
         self.horizontal_layout.addWidget(self.content_container)
         
         # Configurar áreas
-        self.create_file_selection_area()
         self.create_viewer_area()
+        self.create_transcription_area()
+        self.create_projects_area()
+        self.create_new_project_area()
 
     def create_sidebar(self):
         # Frame para o sidebar
@@ -99,7 +103,7 @@ class MainWindow(QMainWindow):
 
         # Simplificar menu de botões
         self.menu_buttons = {
-            'new_project': self.create_menu_button("Novo Projeto", "➕", self.select_video),
+            'new_project': self.create_menu_button("Novo Projeto", "➕", lambda: self.show_content(3)),
             'video': self.create_menu_button("Player de Vídeo", "🎬", lambda: self.show_content(0)),
             'transcripts': self.create_menu_button("Transcrição", "📝", lambda: self.show_content(1)),
             'projects': self.create_menu_button("Projetos", "📁", lambda: self.show_content(2))
@@ -122,15 +126,14 @@ class MainWindow(QMainWindow):
         self.sidebar_frame.layout().addWidget(btn)
         return btn  # Retornar o botão para permitir configurações adicionais
 
-    def show_projects(self):
-        """Mostra a aba de projetos e atualiza a lista"""
-        self.show_content(3)
-
-    def create_file_selection_area(self):
-        file_layout = QVBoxLayout()
+    def create_new_project_area(self):
+        new_project_container = QWidget()
+        new_project_layout = QVBoxLayout(new_project_container)
+        new_project_layout.setContentsMargins(20, 20, 20, 20)
+        new_project_layout.setSpacing(15)
         
         file_group = QGroupBox("Seleção de Arquivo")
-        file_group.setLayout(file_layout)
+        file_layout = QVBoxLayout(file_group)
 
         self.file_label = QLabel("Selecione um arquivo de vídeo")
         self.file_label.setFont(QFont("Roboto", 12))
@@ -161,7 +164,8 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("")
         file_layout.addWidget(self.status_label)
 
-        self.content_layout.addWidget(file_group)
+        new_project_layout.addWidget(file_group)
+        self.content_stack.addWidget(new_project_container)  # index 3
 
     def create_viewer_area(self):
         # Criar stacked widget
@@ -173,6 +177,16 @@ class MainWindow(QMainWindow):
         self.video_player = VideoPlayer()
         video_layout.addWidget(self.video_player)
         
+        # Adicionar opções de vídeo
+        self.video_options = QComboBox()
+        self.video_options.addItem("Vídeo Original")
+        self.video_options.currentIndexChanged.connect(self.change_video_source)
+        video_layout.addWidget(self.video_options)
+        
+        self.content_stack.addWidget(video_container)  # index 0
+        self.content_layout.addWidget(self.content_stack)
+
+    def create_transcription_area(self):
         # Área de transcrição
         transcript_container = QWidget()
         transcript_layout = QVBoxLayout(transcript_container)
@@ -192,6 +206,9 @@ class MainWindow(QMainWindow):
         transcript_layout.addLayout(transcript_buttons)
         transcript_layout.addWidget(self.transcript_area)
         
+        self.content_stack.addWidget(transcript_container)  # index 1
+
+    def create_projects_area(self):
         # Área de projetos
         projects_container = QWidget()
         projects_layout = QVBoxLayout(projects_container)
@@ -199,31 +216,7 @@ class MainWindow(QMainWindow):
         self.previous_projects_list.itemClicked.connect(self.load_previous_project)
         projects_layout.addWidget(self.previous_projects_list)
         
-        # Adicionar widgets ao stack
-        self.content_stack.addWidget(video_container)      # index 0
-        self.content_stack.addWidget(transcript_container) # index 1
-        self.content_stack.addWidget(projects_container)   # index 2
-        
-        self.content_layout.addWidget(self.content_stack)
-        
-        # Configurar os estilos
-        self.previous_projects_list.setObjectName("previous_projects_list")
-
-    def setup_media_player(self):
-        """Configurar player VLC"""
-        if not HAS_VLC:
-            return
-            
-        self.video_widget = QWidget()
-        try:
-            if sys.platform.startswith('linux'):  # Linux
-                self.media_player.set_xwindow(self.video_widget.winId())
-            elif sys.platform == "win32":  # Windows
-                self.media_player.set_hwnd(self.video_widget.winId())
-            elif sys.platform == "darwin":  # macOS
-                self.media_player.set_nsobject(int(self.video_widget.winId()))
-        except Exception as e:
-            print(f"Erro ao configurar player VLC: {e}")
+        self.content_stack.addWidget(projects_container)  # index 2
 
     def select_video(self):
         options = QFileDialog.Options()
@@ -290,7 +283,7 @@ class MainWindow(QMainWindow):
             self.status_label.setText("Projeto carregado com sucesso!")
             
             # Carregar vídeo se disponível
-            video_file = Path(self.current_project['video_file'])
+            video_file = Path(self.current_project['original_video'])
             if video_file.exists():
                 self.video_player.load_video(str(video_file))
 
@@ -393,20 +386,12 @@ class MainWindow(QMainWindow):
             if not projects_dir.exists():
                 return
 
-            self.projects_menu.clear()
-            self.projects_menu.addAction(self.refresh_projects_action)        
-            self.projects_menu.addSeparator()
+            # Limpar lista anterior
             self.previous_projects_list.clear()
 
             for project_dir in projects_dir.glob('*'):
                 if project_dir.is_dir():
                     project_name = project_dir.name
-                    # Adicionar ao menu
-                    project_action = QAction(project_name, self)
-                    project_action.triggered.connect(
-                        lambda checked, p=project_dir: self.load_previous_project(p))
-                    self.projects_menu.addAction(project_action)
-                    # Adicionar à lista
                     self.previous_projects_list.addItem(project_name)
 
         except Exception as e:
@@ -426,15 +411,15 @@ class MainWindow(QMainWindow):
             original_dir = project_dir / 'original'
             segments_dir = project_dir / 'segments'
             
-            # Procurar vídeo sem áudio e áudio completo
-            video_file = list(original_dir.glob('video_no_audio.mp4'))[0]
+            # Procurar vídeo original e áudio completo
+            video_file = list(original_dir.glob('*.*'))[0]
             audio_file = segments_dir / 'full_audio.wav'
 
             if not video_file.exists() or not audio_file.exists():
                 raise Exception("Arquivos de vídeo ou áudio não encontrados")
 
             self.current_project = {
-                'video_file': str(video_file),
+                'original_video': str(video_file),
                 'audio_file': str(audio_file),
                 'segments_dir': str(segments_dir),
                 'transcripts_dir': str(project_dir / 'transcripts'),
@@ -601,79 +586,6 @@ class MainWindow(QMainWindow):
             border: none;
             width: 30px;
         }
-        
-        /* Estilo dos labels */
-        QLabel {
-            color: #2c3e50;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        /* Estilo dos controles de áudio */
-        #audio_controls {
-            background-color: #34495e;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 10px;
-        }
-        
-        #current_segment_label {
-            color: white;
-            font-weight: bold;
-            padding: 10px;
-            background-color: #2c3e50;
-            border-radius: 6px;
-            margin-bottom: 15px;
-        }
-        
-        QPushButton#control_button {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 20px;
-            padding: 12px;
-            min-width: 40px;
-            min-height: 40px;
-            font-size: 18px;
-            font-weight: bold;
-        }
-        
-        QPushButton#control_button:hover {
-            background-color: #2980b9;
-        }
-        
-        QPushButton#control_button:pressed {
-            background-color: #2574a9;
-        }
-        
-        QPushButton#control_button:disabled {
-            background-color: #95a5a6;
-        }
-
-        /* Estilo da área de texto */
-        QTextEdit {
-            background-color: white;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 14px;
-            color: #2c3e50;
-        }
-        
-        QTextEdit:focus {
-            border-color: #3498db;
-        }
-        
-        /* Estilo do total_info_label */
-        #total_info_label {
-            background-color: #3498db;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            font-size: 15px;
-        }
         """
 
     def show_editor(self):
@@ -809,3 +721,27 @@ class MainWindow(QMainWindow):
         # Atualizar dados se necessário
         if index == 3:  # Projects
             self.refresh_projects_list()
+
+    def change_video_source(self, index):
+        if self.current_project:
+            try:
+                video_file = Path(self.current_project['original_video'])
+                if video_file.exists():
+                    print(f"Carregando vídeo: {video_file}")  # Debug
+                    self.video_player.load_video(str(video_file))
+                else:
+                    QMessageBox.warning(self, "Erro", f"Arquivo não encontrado: {video_file}")
+            
+            except Exception as e:
+                print(f"Erro detalhado: {str(e)}")  # Debug
+                QMessageBox.warning(self, "Erro", f"Erro ao trocar fonte do vídeo: {str(e)}")
+
+    def setup_menu(self):
+        """Configura o menu da aplicação"""
+        menubar = self.menuBar()
+        self.projects_menu = menubar.addMenu('&Projetos')
+        
+        # Ação para atualizar lista de projetos
+        self.refresh_projects_action = QAction('Atualizar Lista', self)
+        self.refresh_projects_action.triggered.connect(self.refresh_projects_list)
+        self.projects_menu.addAction(self.refresh_projects_action)
