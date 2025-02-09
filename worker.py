@@ -1,8 +1,7 @@
 from PyQt5.QtCore import QThread, pyqtSignal
-from vad import detect_voice_activity
-from diarization import diarize_audio
-from transcribe import transcribe_audio
+import traceback
 from audio_processing import extract_audio
+from transcribe import transcribe_audio
 import os
 
 class AudioProcessingWorker(QThread):
@@ -17,37 +16,25 @@ class AudioProcessingWorker(QThread):
 
     def run(self):
         try:
-            # 1. Extrair áudio e vídeo
-            self.progress.emit(10, "Processando vídeo...")
-            results = extract_audio(self.video_file)
+            # Extrair áudio
+            self.progress.emit(20, "Extraindo áudio do vídeo...")
+            project_data = extract_audio(self.video_file)
             
-            # 2. Diarização
-            self.progress.emit(30, "Detectando segmentos de fala...")
-            segments = diarize_audio(results['audio_file'], results['segments_dir'])
-            
-            if not segments:
-                self.error.emit("Nenhum segmento de fala detectado")
-                return
-            
-            # 3. Transcrição
-            self.progress.emit(50, "Iniciando transcrição...")
-            transcription, translation = transcribe_audio(
-                results['audio_file'],
-                self.language,
-                results['transcripts_dir']
+            # Transcrever áudio completo
+            self.progress.emit(60, "Transcrevendo áudio...")
+            transcription, error = transcribe_audio(
+                project_data['audio_file'],
+                language=self.language,
+                transcripts_dir=project_data['transcripts_dir']
             )
             
-            if not transcription:
-                self.error.emit("Falha na transcrição")
+            if error:
+                self.error.emit(error)
                 return
                 
-            self.progress.emit(90, "Finalizando...")
-            
-            # 4. Retornar resultados
-            results['segments'] = segments
-            results['transcription'] = transcription
-            
-            self.finished.emit(results)
+            self.progress.emit(100, "Processamento concluído!")
+            self.finished.emit(project_data)
             
         except Exception as e:
+            traceback.print_exc()
             self.error.emit(str(e))

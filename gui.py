@@ -1,21 +1,19 @@
 from PyQt5.QtWidgets import (QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout,
-                             QWidget, QFileDialog, QLabel, QComboBox, QProgressBar,
-                             QAction, QListWidget, QListWidgetItem, QTextEdit, QSplitter, 
-                             QGroupBox, QTabWidget, QMessageBox, QMenu, QFrame, QSizePolicy, QStackedWidget)
-from PyQt5.QtCore import Qt, QUrl, QPropertyAnimation, QTimer
+                           QWidget, QFileDialog, QLabel, QComboBox, QProgressBar,
+                           QAction, QListWidget, QListWidgetItem, QTextEdit,
+                           QGroupBox, QMessageBox, QMenu, QFrame, QSizePolicy, QStackedWidget)
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon, QFont
 import json
 from pathlib import Path
 from worker import AudioProcessingWorker
-from segment_editor import SegmentEditor
 import sys
 import os
 import platform
 import ctypes
-from editor_window import VideoEditor  # Adicionar esta linha
 from video_player import VideoPlayer
 
-# Adicionar caminho do VLC ao PATH do sistema (ajuste o caminho conforme sua instalação)
+# Adicionar caminho do VLC ao PATH do sistema
 VLC_PATHS = [
     r"C:\Program Files\VideoLAN\VLC",
     r"C:\Program Files (x86)\VideoLAN\VLC",
@@ -56,12 +54,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Audio Extractor and Transcriber")
         self.setGeometry(100, 100, 1400, 800)
         self.current_project = None
-        self.editor = None  # Inicializar editor como None
-        
-        # Adicionar atributo projects_menu
-        self.projects_menu = QMenu("Projetos")
-        self.refresh_projects_action = QAction("Atualizar Lista", self)
-        self.refresh_projects_action.triggered.connect(self.refresh_projects_list)  # Adicionar conexão
         
         # Widget central com layout horizontal
         self.central_widget = QWidget()
@@ -70,46 +62,25 @@ class MainWindow(QMainWindow):
         self.horizontal_layout.setContentsMargins(0, 0, 0, 0)
         self.horizontal_layout.setSpacing(0)
 
-        # Criar menu lateral
+        # Criar menu lateral e configurar interface
         self.create_sidebar()
-        
-        # Container principal para o conteúdo
+        self.setup_ui()
+        self.setStyleSheet(self.get_styles())
+
+    def setup_ui(self):
+        # Container principal
         self.content_container = QWidget()
         self.content_layout = QVBoxLayout(self.content_container)
         self.content_layout.setContentsMargins(20, 20, 20, 20)
         self.content_layout.setSpacing(15)
         
-        # Adicionar widgets ao layout principal
+        # Adicionar ao layout principal
         self.horizontal_layout.addWidget(self.sidebar_frame)
         self.horizontal_layout.addWidget(self.content_container)
         
-        # Configurar áreas principais
+        # Configurar áreas
         self.create_file_selection_area()
         self.create_viewer_area()
-        
-        # Modificar inicialização do VLC
-        if HAS_VLC:
-            try:
-                # Usar configuração padrão do VLC
-                self.vlc_instance = vlc.Instance()
-                
-                if self.vlc_instance:
-                    self.media_player = self.vlc_instance.media_player_new()
-                else:
-                    self.media_player = None
-                    print("Erro: Não foi possível criar instância do VLC")
-            except Exception as e:
-                self.vlc_instance = None
-                self.media_player = None
-                print(f"Erro ao inicializar VLC: {e}")
-        else:
-            self.vlc_instance = None
-            self.media_player = None
-            QMessageBox.warning(self, "Aviso", 
-                "VLC não encontrado. Por favor, instale o VLC Media Player para funcionalidade completa.\n"
-                "Download: https://www.videolan.org/vlc/")
-        
-        self.setStyleSheet(self.get_styles())
 
     def create_sidebar(self):
         # Frame para o sidebar
@@ -126,14 +97,12 @@ class MainWindow(QMainWindow):
         logo_label.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(logo_label)
 
-        # Modificar criação dos botões do menu
+        # Simplificar menu de botões
         self.menu_buttons = {
             'new_project': self.create_menu_button("Novo Projeto", "➕", self.select_video),
-            'segments': self.create_menu_button("Segmentos", "🎵", lambda: self.show_content(0)),
-            'video': self.create_menu_button("Player de Vídeo", "🎬", lambda: self.show_content(1)),
-            'transcripts': self.create_menu_button("Transcrição", "📝", lambda: self.show_content(2)),
-            'projects': self.create_menu_button("Projetos", "📁", lambda: self.show_content(3)),
-            'editor': self.create_menu_button("Editor", "✂️", lambda: self.show_content(4))
+            'video': self.create_menu_button("Player de Vídeo", "🎬", lambda: self.show_content(0)),
+            'transcripts': self.create_menu_button("Transcrição", "📝", lambda: self.show_content(1)),
+            'projects': self.create_menu_button("Projetos", "📁", lambda: self.show_content(2))
         }
         
         # Adicionar botões ao layout
@@ -195,68 +164,8 @@ class MainWindow(QMainWindow):
         self.content_layout.addWidget(file_group)
 
     def create_viewer_area(self):
-        # Criar stacked widget em vez de tabs
+        # Criar stacked widget
         self.content_stack = QStackedWidget()
-        
-        # Área de segmentos
-        segments_container = QWidget()
-        segments_layout = QHBoxLayout(segments_container)
-        
-        # Lista de segmentos com informações detalhadas
-        segments_list_container = QWidget()
-        segments_list_layout = QVBoxLayout(segments_list_container)
-        
-        # Adicionar label com informações totais
-        self.total_info_label = QLabel()
-        segments_list_layout.addWidget(self.total_info_label)
-        
-        # Lista de segmentos
-        self.segments_list = QListWidget()
-        self.segments_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.segments_list.customContextMenuRequested.connect(self.show_segment_context_menu)
-        self.segments_list.itemClicked.connect(self.segment_selected)
-        segments_list_layout.addWidget(self.segments_list)
-        
-        # Player de áudio para segmentos
-        player_container = QWidget()
-        player_layout = QVBoxLayout(player_container)
-        
-        # Info do segmento atual
-        self.current_segment_label = QLabel("Nenhum segmento selecionado")
-        player_layout.addWidget(self.current_segment_label)
-        
-        # Controles de playback
-        controls_layout = QHBoxLayout()
-        
-        # Modificar o botão de play para mostrar estado atual
-        self.segment_play_btn = QPushButton("⏵")
-        self.segment_play_btn.setFixedWidth(50)
-        self.segment_play_btn.setCheckable(True)  # Permite que o botão fique pressionado
-        self.segment_play_btn.clicked.connect(self.toggle_segment_playback)
-        
-        self.segment_stop_btn = QPushButton("⏹")
-        self.segment_stop_btn.setFixedWidth(50)
-        self.segment_stop_btn.clicked.connect(self.stop_segment)
-        
-        self.segment_delete_btn = QPushButton("🗑️")
-        self.segment_delete_btn.setFixedWidth(50)
-        self.segment_delete_btn.clicked.connect(self.delete_current_segment)
-        
-        for btn in [self.segment_play_btn, self.segment_stop_btn, self.segment_delete_btn]:
-            controls_layout.addWidget(btn)
-            btn.setEnabled(False)
-        
-        controls_layout.addStretch()
-        player_layout.addLayout(controls_layout)
-        
-        # Progress bar para o segmento
-        self.segment_progress = QProgressBar()
-        self.segment_progress.setTextVisible(False)
-        player_layout.addWidget(self.segment_progress)
-        
-        # Adicionar ao layout principal
-        segments_layout.addWidget(segments_list_container, 2)  # Proporção 2
-        segments_layout.addWidget(player_container, 1)         # Proporção 1
         
         # Área de vídeo
         video_container = QWidget()
@@ -290,28 +199,15 @@ class MainWindow(QMainWindow):
         self.previous_projects_list.itemClicked.connect(self.load_previous_project)
         projects_layout.addWidget(self.previous_projects_list)
         
-        # Criar editor de segmentos
-        self.segment_editor = SegmentEditor()
-        
         # Adicionar widgets ao stack
-        self.content_stack.addWidget(segments_container)      # index 0
-        self.content_stack.addWidget(video_container)        # index 1
-        self.content_stack.addWidget(transcript_container)   # index 2
-        self.content_stack.addWidget(projects_container)     # index 3
-        self.content_stack.addWidget(self.segment_editor)    # index 4 - Editor de segmentos
+        self.content_stack.addWidget(video_container)      # index 0
+        self.content_stack.addWidget(transcript_container) # index 1
+        self.content_stack.addWidget(projects_container)   # index 2
         
         self.content_layout.addWidget(self.content_stack)
-
-        # Modificar os IDs dos elementos para usar os novos estilos
-        self.total_info_label.setObjectName("total_info_label")
-        self.segments_list.setObjectName("segments_list")
-        player_container.setObjectName("audio_controls")
-        self.current_segment_label.setObjectName("current_segment_label")
-        self.previous_projects_list.setObjectName("previous_projects_list")
         
-        # Configurar botões de controle
-        for btn in [self.segment_play_btn, self.segment_stop_btn, self.segment_delete_btn]:
-            btn.setObjectName("control_button")
+        # Configurar os estilos
+        self.previous_projects_list.setObjectName("previous_projects_list")
 
     def setup_media_player(self):
         """Configurar player VLC"""
@@ -362,8 +258,13 @@ class MainWindow(QMainWindow):
             self.select_button.setEnabled(True)
             self.progress_bar.setVisible(False)
             self.status_label.setText("Processamento concluído!")
+            
+            # Carregar dados do projeto
             self.load_project_data()
-            self.show_viewer()
+            
+            # Mostrar a aba de transcrição
+            self.show_content(1)  # index 1 é a aba de transcrição
+            
         except Exception as e:
             self.on_error(f"Erro ao finalizar processamento: {str(e)}")
 
@@ -377,58 +278,21 @@ class MainWindow(QMainWindow):
 
     def load_project_data(self):
         if self.current_project:
-            self.segments_list.clear()
-            segments_dir = Path(self.current_project['segments_dir'])
-            
-            # Carregar informações dos segmentos
-            segments_info = []
-            total_duration = 0
-            
-            for segment_file in segments_dir.glob('*.wav'):
-                name_parts = segment_file.stem.split('_')
-                if len(name_parts) >= 3:
-                    try:
-                        duration = float(name_parts[2].replace('s', ''))
-                        segments_info.append({
-                            'file': segment_file,
-                            'name': segment_file.name,
-                            'duration': duration
-                        })
-                        total_duration += duration
-                    except ValueError:
-                        continue
-            
-            # Atualizar informações totais
-            self.total_info_label.setText(
-                f"Total de segmentos: {len(segments_info)} | "
-                f"Duração total: {total_duration:.1f}s"
-            )
-            
-            # Ordenar por duração
-            segments_info.sort(key=lambda x: x['duration'], reverse=True)
-            
-            # Adicionar à lista com formatação melhorada
-            for segment in segments_info:
-                item = QListWidgetItem()
-                duration = f"{segment['duration']:.1f}s"
-                
-                # Texto simples para exibição
-                display_text = f"{segment['name']} ({duration})"
-                item.setText(display_text)
-                
-                # Armazenar o caminho completo do arquivo como dado
-                item.setData(Qt.UserRole, str(segment['file']))
-                
-                # Aplicar estilo através do CSS
-                item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-                
-                self.segments_list.addItem(item)
-
-            # Carregar segmentos no editor
-            self.segment_editor.load_segments(self.current_project['segments_dir'])
-
             # Carregar transcrição
             self.load_transcription()
+            
+            # Verificar se existe áudio completo
+            audio_file = Path(self.current_project['audio_file'])
+            if not audio_file.exists():
+                self.status_label.setText("Aviso: Arquivo de áudio não encontrado")
+                return
+                
+            self.status_label.setText("Projeto carregado com sucesso!")
+            
+            # Carregar vídeo se disponível
+            video_file = Path(self.current_project['video_file'])
+            if video_file.exists():
+                self.video_player.load_video(str(video_file))
 
     def load_transcription(self):
         """Carrega a transcrição do projeto atual"""
@@ -457,7 +321,6 @@ class MainWindow(QMainWindow):
                 item_text = item.text()
                 filename = item_text.split(" (Duração:")[0]
                 segment_path = Path(self.current_project['segments_dir']) / filename
-                
                 if segment_path.exists():
                     media = self.vlc_instance.media_new(str(segment_path))
                     if media:
@@ -486,7 +349,6 @@ class MainWindow(QMainWindow):
         menu = QMenu()
         delete_action = menu.addAction("Excluir Segmento")
         action = menu.exec_(self.segments_list.mapToGlobal(position))
-        
         if action == delete_action:
             current_item = self.segments_list.currentItem()
             if current_item:
@@ -518,7 +380,6 @@ class MainWindow(QMainWindow):
                     'audio_file': 'full_audio.wav',
                     'language': self.language_combo.currentText()
                 }
-                
                 with open(transcript_path, 'w', encoding='utf-8') as f:
                     json.dump(transcript_data, f, ensure_ascii=False, indent=2)
                 
@@ -533,7 +394,7 @@ class MainWindow(QMainWindow):
                 return
 
             self.projects_menu.clear()
-            self.projects_menu.addAction(self.refresh_projects_action)
+            self.projects_menu.addAction(self.refresh_projects_action)        
             self.projects_menu.addSeparator()
             self.previous_projects_list.clear()
 
@@ -596,7 +457,7 @@ class MainWindow(QMainWindow):
         QMainWindow {
             background-color: #f5f6fa;
         }
-        
+
         /* Estilo do menu lateral */
         #sidebar {
             background-color: #2c3e50;
@@ -613,7 +474,7 @@ class MainWindow(QMainWindow):
             background-color: #34495e;
             border-bottom: 2px solid #3498db;
         }
-        
+
         #menuButton {
             background-color: transparent;
             border: none;
@@ -622,20 +483,19 @@ class MainWindow(QMainWindow):
             padding: 15px 25px;
             font-size: 16px;
             border-radius: 0;
-            transition: all 0.3s ease;
         }
-        
+
         #menuButton:hover {
             background-color: #34495e;
             padding-left: 35px;
         }
-        
+
         #menuButton:checked {
             background-color: #3498db;
             border-left: 4px solid #2ecc71;
             font-weight: bold;
         }
-        
+
         /* Estilos gerais dos botões */
         QPushButton {
             background-color: #3498db;
@@ -646,9 +506,8 @@ class MainWindow(QMainWindow):
             font-size: 14px;
             font-weight: bold;
             min-width: 120px;
-            transition: background-color 0.3s;
         }
-        
+
         QPushButton:hover {
             background-color: #2980b9;
         }
@@ -656,11 +515,11 @@ class MainWindow(QMainWindow):
         QPushButton:pressed {
             background-color: #2574a9;
         }
-        
+
         QPushButton:disabled {
             background-color: #bdc3c7;
         }
-        
+
         /* Estilo dos grupos */
         QGroupBox {
             background-color: white;
@@ -668,7 +527,6 @@ class MainWindow(QMainWindow):
             border-radius: 12px;
             margin-top: 30px;
             padding: 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
         QGroupBox::title {
@@ -679,7 +537,7 @@ class MainWindow(QMainWindow):
             left: 20px;
             padding: 0 10px;
         }
-        
+
         /* Estilo das listas */
         QListWidget {
             background-color: white;
@@ -744,19 +602,13 @@ class MainWindow(QMainWindow):
             width: 30px;
         }
         
-        QComboBox::down-arrow {
-            image: url(icons/down-arrow.png);
-            width: 12px;
-            height: 12px;
-        }
-        
         /* Estilo dos labels */
         QLabel {
             color: #2c3e50;
             font-size: 14px;
             font-weight: 500;
         }
-        
+
         /* Estilo dos controles de áudio */
         #audio_controls {
             background-color: #34495e;
@@ -788,7 +640,6 @@ class MainWindow(QMainWindow):
         
         QPushButton#control_button:hover {
             background-color: #2980b9;
-            transform: scale(1.1);
         }
         
         QPushButton#control_button:pressed {
@@ -798,7 +649,7 @@ class MainWindow(QMainWindow):
         QPushButton#control_button:disabled {
             background-color: #95a5a6;
         }
-        
+
         /* Estilo da área de texto */
         QTextEdit {
             background-color: white;
@@ -807,7 +658,6 @@ class MainWindow(QMainWindow):
             padding: 10px;
             font-size: 14px;
             color: #2c3e50;
-            line-height: 1.5;
         }
         
         QTextEdit:focus {
@@ -868,11 +718,11 @@ class MainWindow(QMainWindow):
             # Habilitar controles
             for btn in [self.segment_play_btn, self.segment_stop_btn, self.segment_delete_btn]:
                 btn.setEnabled(True)
-                
+
             # Carregar áudio
             media = self.vlc_instance.media_new(str(segment_path))
             self.media_player.set_media(media)
-            
+
             # Configurar timer para atualizar progresso
             if not hasattr(self, 'update_timer'):
                 self.update_timer = QTimer()
@@ -883,7 +733,7 @@ class MainWindow(QMainWindow):
         """Alterna entre play/pause do segmento"""
         if not self.media_player:
             return
-            
+
         if self.media_player.is_playing():
             self.media_player.pause()
             self.segment_play_btn.setText("⏵")  # Play
@@ -910,7 +760,7 @@ class MainWindow(QMainWindow):
         """Atualiza a barra de progresso do segmento"""
         if not self.media_player:
             return
-            
+
         length = self.media_player.get_length()
         if length > 0:
             self.segment_progress.setMaximum(length)
@@ -947,7 +797,7 @@ class MainWindow(QMainWindow):
         for btn in self.menu_buttons.values():
             if hasattr(btn, 'setChecked'):
                 btn.setChecked(False)
-        
+
         # Marcar o botão atual
         sender = self.sender()
         if sender and hasattr(sender, 'setChecked'):

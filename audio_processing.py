@@ -35,12 +35,11 @@ def extract_audio(video_file):
         segments_dir, transcripts_dir, original_video, project_id = create_project_dirs(video_file)
         
         # Definir caminhos de saída
-        base_dir = Path(segments_dir).parent
         audio_file = str(Path(segments_dir) / 'full_audio.wav')
-        video_without_audio = str(base_dir / 'original' / 'video_no_audio.mp4')
+        video_without_audio = str(Path(segments_dir).parent / 'original' / 'video_no_audio.mp4')
         
         try:
-            # Extrair áudio
+            # Extrair áudio em WAV 16kHz mono
             stream_audio = ffmpeg.input(video_file)
             stream_audio = ffmpeg.output(
                 stream_audio,
@@ -63,10 +62,6 @@ def extract_audio(video_file):
                 loglevel='error'
             )
             ffmpeg.run(stream_video, overwrite_output=True)
-            
-            # Excluir vídeo original após o processamento bem-sucedido
-            if original_video != video_without_audio:  # Garantir que não exclua o vídeo sem áudio
-                Path(original_video).unlink()
             
         except ffmpeg.Error as e:
             raise Exception(f"Erro FFmpeg: {e.stderr.decode()}")
