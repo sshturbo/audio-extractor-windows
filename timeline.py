@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                            QSlider, QLabel, QFrame)
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QUrl
 from PyQt5.QtGui import QPainter, QColor, QPen
-import vlc
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 
 class TimelineSegment(QFrame):
     clicked = pyqtSignal(object)
@@ -36,6 +36,9 @@ class Timeline(QWidget):
         self.current_time = 0
         self.duration = 0
         self.segments = []
+        self.media_player = QMediaPlayer()
+        self.media_player.positionChanged.connect(self.update_position)
+        self.media_player.durationChanged.connect(self.set_duration)
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -82,13 +85,14 @@ class Timeline(QWidget):
         self.update_timer.setInterval(100)  # 100ms
         self.update_timer.timeout.connect(self.update_time)
         
-    def set_media_player(self, player):
-        self.media_player = player
-        
+    def set_media(self, file_path):
+        self.media_player.setMedia(QMediaContent(QUrl.fromLocalFile(file_path)))
+            
     def toggle_playback(self):
-        if self.media_player.is_playing():
+        if self.media_player.state() == QMediaPlayer.PlayingState:
             self.media_player.pause()
             self.play_btn.setText("⏵")
+            self.update_timer.stop()
         else:
             self.media_player.play()
             self.play_btn.setText("⏸")
@@ -100,22 +104,23 @@ class Timeline(QWidget):
         self.update_timer.stop()
         
     def seek(self, value):
-        if self.media_player:
-            self.media_player.set_position(value / 1000.0)
+        self.media_player.setPosition(value)
             
-    def update_time(self):
-        if self.media_player:
-            time = self.media_player.get_time()
-            duration = self.media_player.get_length()
-            
-            if duration > 0:
-                self.time_slider.setMaximum(duration)
-                self.time_slider.setValue(time)
+    def update_position(self, position):
+        if not self.time_slider.isSliderDown():
+            self.time_slider.setValue(position)
+        self.update_time_label(position)
                 
-                current = self.format_time(time)
-                total = self.format_time(duration)
-                self.time_label.setText(f"{current} / {total}")
-                
+    def set_duration(self, duration):
+        self.time_slider.setRange(0, duration)
+        self.duration = duration
+        self.update_time_label(self.media_player.position())
+        
+    def update_time_label(self, position):
+        current = self.format_time(position)
+        total = self.format_time(self.duration)
+        self.time_label.setText(f"{current} / {total}")
+
     def format_time(self, ms):
         s = ms // 1000
         m = s // 60
@@ -130,6 +135,6 @@ class Timeline(QWidget):
         
     def split_at_current_time(self):
         if self.media_player:
-            current_time = self.media_player.get_time()
+            current_time = self.media_player.position()
             # Emitir sinal para criar novo segmento
             self.timeChanged.emit(current_time / 1000.0)

@@ -1,0 +1,124 @@
+/* Container de vídeo */
+.video-container {
+    background-color: black;
+    border-radius: 12px;
+    border: 2px solid #1e1e1e;
+}
+
+.video-widget {
+    border: none;
+}
+
+/* Controles */
+.controls-frame {
+    background-color: rgba(45, 45, 45, 0.95);
+    border-radius: 15px;
+    margin: 10px;
+}
+
+/* Slider de Posição */
+QSlider::groove:horizontal {
+    border: none;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+QSlider::sub-page:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #4CAF50, stop:1 #45a049);
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #4CAF50;
+    border: 2px solid #45a049;
+    width: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #5CBA60;
+    border: 2px solid #4CAF50;
+}
+
+/* Time Label */
+.time-label {
+    color: white;
+    font-family: 'Segoe UI', Arial;
+    font-size: 12px;
+    padding: 0 5px;
+}
+
+/* Botões de Controle */
+.control-button {
+    background-color: rgba(76, 175, 80, 0.9);
+    border: none;
+    border-radius: 15px;
+    padding: 8px;
+    min-width: 35px;
+    min-height: 35px;
+}
+
+.control-button:hover {
+    background-color: rgba(92, 186, 96, 0.9);
+}
+
+.control-button:pressed {
+    background-color: rgba(69, 160, 73, 0.9);
+}
+
+/* Slider de Volume */
+.volume-slider::groove:horizontal {
+    border: none;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+}
+
+.volume-slider::sub-page:horizontal {
+    background: #4CAF50;
+    border-radius: 2px;
+}
+
+.volume-slider::handle:horizontal {
+    background: white;
+    border: 2px solid #4CAF50;
+    width: 12px;
+    height: 12px;
+    margin: -4px 0;
+    border-radius: 7px;
+}
+
+.volume-slider::handle:horizontal:hover {
+    background: #4CAF50;
+    border: 2px solid white;
+}
+
+/* Position Slider */
+.position-slider::groove:horizontal {
+    border: none;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.position-slider::sub-page:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #4CAF50, stop:1 #45a049);
+    border-radius: 3px;
+}
+
+.position-slider::handle:horizontal {
+    background: #4CAF50;
+    border: 2px solid #45a049;
+    width: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+
+.position-slider::handle:horizontal:hover {
+    background: #5CBA60;
+    border: 2px solid #4CAF50;
+}

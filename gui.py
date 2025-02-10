@@ -1,50 +1,26 @@
 from PyQt5.QtWidgets import (QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout,
                            QWidget, QFileDialog, QLabel, QComboBox, QProgressBar,
                            QAction, QListWidget, QListWidgetItem, QTextEdit,
-                           QGroupBox, QMessageBox, QMenu, QFrame, QSizePolicy, QStackedWidget)
-from PyQt5.QtCore import Qt, QTimer
+                           QGroupBox, QMessageBox, QMenu, QFrame, QSizePolicy, 
+                           QStackedWidget, QSlider, QStyle, QApplication)  # Adicionar QApplication aqui
+from PyQt5.QtCore import Qt, QTimer, QUrl
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtGui import QIcon, QFont
 import json
 from pathlib import Path
 from worker import AudioProcessingWorker
 import sys
 import os
-import platform
-import ctypes
 from video_player import VideoPlayer
+from video_editor.clipchamp_editor import ClipchampEditor
 
-# Adicionar caminho do VLC ao PATH do sistema
-VLC_PATHS = [
-    r"C:\Program Files\VideoLAN\VLC",
-    r"C:\Program Files (x86)\VideoLAN\VLC",
-]
-
-# Verificar arquitetura do sistema
-is_64bits = platform.architecture()[0] == '64bit'
-
-for vlc_path in VLC_PATHS:
-    if os.path.exists(vlc_path):
-        if is_64bits and 'Program Files (x86)' in vlc_path:
-            continue  # Ignorar VLC 32-bit em sistema 64-bit
-        if not is_64bits and 'Program Files' in vlc_path and 'Program Files (x86)' not in vlc_path:
-            continue  # Ignorar VLC 64-bit em sistema 32-bit
-        if vlc_path not in os.environ['PATH']:
-            os.environ['PATH'] = vlc_path + os.pathsep + os.environ['PATH']
-        break
-
-try:
-    # Especificar o caminho completo para a DLL do VLC
-    if is_64bits:
-        vlc_dll_path = r"C:\Program Files\VideoLAN\VLC\libvlc.dll"
-    else:
-        vlc_dll_path = r"C:\Program Files (x86)\VideoLAN\VLC\libvlc.dll"
-    
-    ctypes.CDLL(vlc_dll_path)
-    import vlc
-    HAS_VLC = True
-except (ImportError, OSError) as e:
-    HAS_VLC = False
-    print(f"VLC não encontrado ou erro ao carregar: {e}")
+def load_stylesheet(filename):
+    """Carrega arquivo CSS"""
+    css_file = Path(__file__).parent / 'assets' / 'css' / filename
+    if css_file.exists():
+        with open(css_file, 'r', encoding='utf-8') as f:
+            return f.read()
+    return ""
 
 class MainWindow(QMainWindow):
     VIDEO_FORMATS = "*.mp4 *.avi *.mkv *.mov *.wmv *.flv *.webm"
@@ -54,6 +30,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Audio Extractor and Transcriber")
         self.setGeometry(100, 100, 1400, 800)
         self.current_project = None
+        
+        # Carregar stylesheet
+        self.setStyleSheet(load_stylesheet('gui.css'))
         
         # Widget central com layout horizontal
         self.central_widget = QWidget()
@@ -65,9 +44,8 @@ class MainWindow(QMainWindow):
         # Criar menu lateral e configurar interface
         self.create_sidebar()
         self.setup_ui()
-        self.setStyleSheet(self.get_styles())
-        # Adicionar menu de projetos
         self.setup_menu()
+        self.menu_buttons['editor'] = self.create_menu_button("Editor de Vídeo", "🎬", self.show_video_editor)
 
     def setup_ui(self):
         # Container principal
@@ -113,7 +91,7 @@ class MainWindow(QMainWindow):
         for btn in self.menu_buttons.values():
             sidebar_layout.addWidget(btn)
 
-        # Espaçador
+        # Espaçadorv
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         sidebar_layout.addWidget(spacer)
@@ -168,20 +146,31 @@ class MainWindow(QMainWindow):
         self.content_stack.addWidget(new_project_container)  # index 3
 
     def create_viewer_area(self):
-        # Criar stacked widget
+        # Container principal
         self.content_stack = QStackedWidget()
         
-        # Área de vídeo
+        # Área de vídeo com layout horizontal
         video_container = QWidget()
-        video_layout = QVBoxLayout(video_container)
-        self.video_player = VideoPlayer()
-        video_layout.addWidget(self.video_player)
+        video_layout = QHBoxLayout(video_container)
         
-        # Adicionar opções de vídeo
-        self.video_options = QComboBox()
-        self.video_options.addItem("Vídeo Original")
-        self.video_options.currentIndexChanged.connect(self.change_video_source)
-        video_layout.addWidget(self.video_options)
+        # Lista de vídeos (lado esquerdo)
+        videos_group = QGroupBox("Arquivos de Vídeo")
+        videos_layout = QVBoxLayout(videos_group)
+        
+        self.videos_list = QListWidget()
+        self.videos_list.itemClicked.connect(self.select_video_from_list)
+        videos_layout.addWidget(self.videos_list)
+        
+        video_layout.addWidget(videos_group, stretch=1)
+        
+        # Player de vídeo (lado direito)
+        player_container = QWidget()
+        player_layout = QVBoxLayout(player_container)
+        self.video_player = VideoPlayer()
+        player_layout.addWidget(self.video_player)
+        
+        # Remover controles de volume duplicados aqui
+        video_layout.addWidget(player_container, stretch=2)
         
         self.content_stack.addWidget(video_container)  # index 0
         self.content_layout.addWidget(self.content_stack)
@@ -286,6 +275,8 @@ class MainWindow(QMainWindow):
             video_file = Path(self.current_project['original_video'])
             if video_file.exists():
                 self.video_player.load_video(str(video_file))
+            
+            self.update_videos_list()  # Atualizar lista de vídeos
 
     def load_transcription(self):
         """Carrega a transcrição do projeto atual"""
@@ -305,24 +296,14 @@ class MainWindow(QMainWindow):
             self.video_player.load_video(self.selected_video)
 
     def play_segment(self, item):
-        if not self.media_player:
-            QMessageBox.warning(self, "Erro", "Player de mídia não está disponível")
-            return
-            
-        if self.current_project:
-            try:
-                item_text = item.text()
-                filename = item_text.split(" (Duração:")[0]
-                segment_path = Path(self.current_project['segments_dir']) / filename
-                if segment_path.exists():
-                    media = self.vlc_instance.media_new(str(segment_path))
-                    if media:
-                        self.media_player.set_media(media)
-                        self.media_player.play()
-                else:
-                    QMessageBox.warning(self, "Erro", "Arquivo de áudio não encontrado")
-            except Exception as e:
-                QMessageBox.warning(self, "Erro", f"Erro ao reproduzir segmento: {str(e)}")
+        segment_path = Path(item.data(Qt.UserRole))
+        if segment_path.exists():
+            if not hasattr(self, 'segment_player'):
+                self.segment_player = QMediaPlayer()
+            self.segment_player.setMedia(QMediaContent(QUrl.fromLocalFile(str(segment_path))))
+            self.segment_player.play()
+        else:
+            QMessageBox.warning(self, "Erro", "Arquivo de áudio não encontrado")
 
     def start_segment_playback(self, media):
         """Inicia a reprodução do segmento garantindo que esteja no início"""
@@ -381,18 +362,31 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Erro", f"Erro ao salvar transcrição: {str(e)}")
 
     def refresh_projects_list(self):
+        """Atualiza a lista de projetos de forma otimizada"""
         try:
             projects_dir = Path(__file__).parent / 'projects'
             if not projects_dir.exists():
                 return
 
-            # Limpar lista anterior
+            # Desabilitar atualizações visuais durante o preenchimento
+            self.previous_projects_list.setUpdatesEnabled(False)
             self.previous_projects_list.clear()
 
-            for project_dir in projects_dir.glob('*'):
-                if project_dir.is_dir():
-                    project_name = project_dir.name
-                    self.previous_projects_list.addItem(project_name)
+            # Usar listdir em vez de glob para melhor performance
+            project_dirs = []
+            for item in os.listdir(str(projects_dir)):
+                item_path = projects_dir / item
+                if item_path.is_dir():
+                    project_dirs.append(item)
+
+            # Ordenar por data de modificação (mais recente primeiro)
+            project_dirs.sort(key=lambda x: os.path.getmtime(str(projects_dir / x)), reverse=True)
+
+            # Adicionar itens em lote
+            self.previous_projects_list.addItems(project_dirs)
+
+            # Reabilitar atualizações visuais
+            self.previous_projects_list.setUpdatesEnabled(True)
 
         except Exception as e:
             QMessageBox.warning(self, "Erro", f"Erro ao atualizar lista de projetos: {str(e)}")
@@ -411,8 +405,15 @@ class MainWindow(QMainWindow):
             original_dir = project_dir / 'original'
             segments_dir = project_dir / 'segments'
             
-            # Procurar vídeo original e áudio completo
-            video_file = list(original_dir.glob('*.*'))[0]
+            # Procurar vídeo original e áudio
+            video_files = list(original_dir.glob('*.*'))
+            video_files = [f for f in video_files if f.suffix.lower() in 
+                          ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv']]
+            
+            if not video_files:
+                raise Exception("Vídeo original não encontrado")
+                
+            video_file = video_files[0]  # Usar o primeiro vídeo encontrado
             audio_file = segments_dir / 'full_audio.wav'
 
             if not video_file.exists() or not audio_file.exists():
@@ -435,158 +436,6 @@ class MainWindow(QMainWindow):
 
         except Exception as e:
             QMessageBox.warning(self, "Erro", f"Erro ao carregar projeto: {str(e)}")
-
-    @staticmethod
-    def get_styles():
-        return """
-        QMainWindow {
-            background-color: #f5f6fa;
-        }
-
-        /* Estilo do menu lateral */
-        #sidebar {
-            background-color: #2c3e50;
-            border: none;
-            min-width: 250px;
-            max-width: 250px;
-        }
-        
-        #logo {
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            padding: 25px;
-            background-color: #34495e;
-            border-bottom: 2px solid #3498db;
-        }
-
-        #menuButton {
-            background-color: transparent;
-            border: none;
-            color: #ecf0f1;
-            text-align: left;
-            padding: 15px 25px;
-            font-size: 16px;
-            border-radius: 0;
-        }
-
-        #menuButton:hover {
-            background-color: #34495e;
-            padding-left: 35px;
-        }
-
-        #menuButton:checked {
-            background-color: #3498db;
-            border-left: 4px solid #2ecc71;
-            font-weight: bold;
-        }
-
-        /* Estilos gerais dos botões */
-        QPushButton {
-            background-color: #3498db;
-            color: white;
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: bold;
-            min-width: 120px;
-        }
-
-        QPushButton:hover {
-            background-color: #2980b9;
-        }
-        
-        QPushButton:pressed {
-            background-color: #2574a9;
-        }
-
-        QPushButton:disabled {
-            background-color: #bdc3c7;
-        }
-
-        /* Estilo dos grupos */
-        QGroupBox {
-            background-color: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            margin-top: 30px;
-            padding: 20px;
-        }
-        
-        QGroupBox::title {
-            color: #2c3e50;
-            font-weight: bold;
-            font-size: 16px;
-            subcontrol-origin: margin;
-            left: 20px;
-            padding: 0 10px;
-        }
-
-        /* Estilo das listas */
-        QListWidget {
-            background-color: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 5px;
-            outline: none;
-        }
-        
-        QListWidget::item {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 6px;
-            padding: 12px;
-            margin: 3px;
-            color: #2c3e50;
-        }
-        
-        QListWidget::item:hover {
-            background-color: #e9ecef;
-            border: 1px solid #dee2e6;
-        }
-        
-        QListWidget::item:selected {
-            background-color: #3498db;
-            color: white;
-            border: 1px solid #2980b9;
-        }
-        
-        /* Estilo da barra de progresso */
-        QProgressBar {
-            border: none;
-            border-radius: 8px;
-            background-color: #f0f2f5;
-            text-align: center;
-            height: 12px;
-            font-size: 12px;
-            color: white;
-        }
-        
-        QProgressBar::chunk {
-            background-color: #2ecc71;
-            border-radius: 8px;
-        }
-        
-        /* Estilo do ComboBox */
-        QComboBox {
-            padding: 8px 15px;
-            border: 2px solid #bdc3c7;
-            border-radius: 8px;
-            background-color: white;
-            min-width: 150px;
-            color: #2c3e50;
-        }
-        
-        QComboBox:hover {
-            border-color: #3498db;
-        }
-        
-        QComboBox:drop-down {
-            border: none;
-            width: 30px;
-        }
-        """
 
     def show_editor(self):
         """Mostra a aba do editor de segmentos"""
@@ -619,9 +468,6 @@ class MainWindow(QMainWindow):
 
     def segment_selected(self, item):
         """Callback quando um segmento é selecionado"""
-        if not self.media_player:
-            return
-            
         segment_path = Path(item.data(Qt.UserRole))
         if segment_path.exists():
             # Atualizar label com informações do segmento
@@ -631,42 +477,28 @@ class MainWindow(QMainWindow):
             for btn in [self.segment_play_btn, self.segment_stop_btn, self.segment_delete_btn]:
                 btn.setEnabled(True)
 
-            # Carregar áudio
-            media = self.vlc_instance.media_new(str(segment_path))
-            self.media_player.set_media(media)
-
-            # Configurar timer para atualizar progresso
-            if not hasattr(self, 'update_timer'):
-                self.update_timer = QTimer()
-                self.update_timer.timeout.connect(self.update_segment_progress)
-                self.update_timer.setInterval(100)
+            if not hasattr(self, 'segment_player'):
+                self.segment_player = QMediaPlayer()
+            self.segment_player.setMedia(QMediaContent(QUrl.fromLocalFile(str(segment_path))))
 
     def toggle_segment_playback(self):
         """Alterna entre play/pause do segmento"""
-        if not self.media_player:
-            return
-
-        if self.media_player.is_playing():
-            self.media_player.pause()
-            self.segment_play_btn.setText("⏵")  # Play
-            self.segment_play_btn.setChecked(False)
-            self.update_timer.stop()
-        else:
-            self.media_player.play()
-            self.segment_play_btn.setText("⏸")  # Pause
-            self.segment_play_btn.setChecked(True)
-            self.update_timer.start()
+        if hasattr(self, 'segment_player'):
+            if self.segment_player.state() == QMediaPlayer.PlayingState:
+                self.segment_player.pause()
+                self.segment_play_btn.setText("⏵")
+                self.segment_play_btn.setChecked(False)
+            else:
+                self.segment_player.play()
+                self.segment_play_btn.setText("⏸")
+                self.segment_play_btn.setChecked(True)
 
     def stop_segment(self):
         """Para a reprodução do segmento"""
-        if not self.media_player:
-            return
-            
-        self.media_player.stop()
-        self.segment_play_btn.setText("⏵")  # Reset para play
-        self.segment_play_btn.setChecked(False)
-        self.update_timer.stop()
-        self.segment_progress.setValue(0)
+        if hasattr(self, 'segment_player'):
+            self.segment_player.stop()
+            self.segment_play_btn.setText("⏵")
+            self.segment_play_btn.setChecked(False)
 
     def update_segment_progress(self):
         """Atualiza a barra de progresso do segmento"""
@@ -719,22 +551,30 @@ class MainWindow(QMainWindow):
         self.content_stack.setCurrentIndex(index)
         
         # Atualizar dados se necessário
-        if index == 3:  # Projects
-            self.refresh_projects_list()
+        if index == 2:  # Projects tab
+            QApplication.setOverrideCursor(Qt.WaitCursor)  # Mostrar cursor de espera
+            try:
+                self.refresh_projects_list()
+            finally:
+                QApplication.restoreOverrideCursor()  # Restaurar cursor normal
 
     def change_video_source(self, index):
         if self.current_project:
             try:
+                # Usar sempre o vídeo original
                 video_file = Path(self.current_project['original_video'])
+                
                 if video_file.exists():
                     print(f"Carregando vídeo: {video_file}")  # Debug
                     self.video_player.load_video(str(video_file))
                 else:
                     QMessageBox.warning(self, "Erro", f"Arquivo não encontrado: {video_file}")
+                    self.video_options.setCurrentIndex(0)
             
             except Exception as e:
                 print(f"Erro detalhado: {str(e)}")  # Debug
                 QMessageBox.warning(self, "Erro", f"Erro ao trocar fonte do vídeo: {str(e)}")
+                self.video_options.setCurrentIndex(0)
 
     def setup_menu(self):
         """Configura o menu da aplicação"""
@@ -745,3 +585,35 @@ class MainWindow(QMainWindow):
         self.refresh_projects_action = QAction('Atualizar Lista', self)
         self.refresh_projects_action.triggered.connect(self.refresh_projects_list)
         self.projects_menu.addAction(self.refresh_projects_action)
+
+    def update_videos_list(self):
+        """Atualiza a lista de vídeos disponíveis no projeto atual"""
+        if not self.current_project:
+            return
+            
+        self.videos_list.clear()
+        
+        try:
+            # Adicionar vídeo original
+            original_video = Path(self.current_project['original_video'])
+            if original_video.exists():
+                item = QListWidgetItem(f"📼 {original_video.name}")
+                item.setData(Qt.UserRole, str(original_video))
+                self.videos_list.addItem(item)
+                
+        except Exception as e:
+            print(f"Erro ao atualizar lista de vídeos: {e}")
+
+    def select_video_from_list(self, item):
+        """Carrega o vídeo selecionado da lista"""
+        video_path = item.data(Qt.UserRole)
+        if video_path:
+            self.video_player.load_video(video_path)
+
+    def show_video_editor(self):
+        """Abre o editor de vídeo com o projeto atual"""
+        if self.current_project:
+            self.editor_window = ClipchampEditor(self.current_project)
+            self.editor_window.show()
+        else:
+            QMessageBox.warning(self, "Aviso", "Por favor, carregue um projeto primeiro.")
