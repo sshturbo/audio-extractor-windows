@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (QFrame, QVBoxLayout, QLabel, QSizePolicy, QHBoxLayout, 
-                           QSlider, QWidget, QPushButton, QMenu, QActionGroup, QStyle, QAction)
+                           QSlider, QWidget, QPushButton, QMenu, QActionGroup, QStyle, QAction, QWidgetAction)
 from PyQt5.QtCore import Qt, QTimer, QSize
 from PyQt5.QtGui import QImage, QPixmap
 import traceback
@@ -248,38 +248,19 @@ class PreviewWidget(QFrame):
         speed_group.setExclusive(True)
 
         # Velocidades com ícones indicativos
-        for speed in self.available_speeds[:3]:
-            action = QAction(f"⏪ {speed:.2f}x", self) if speed < 1 else QAction(f"{speed:.2f}x", self)
+        for i, speed in enumerate(self.available_speeds):
+            icon = "⏪" if speed < 1 else "⏩" if speed > 1 else "▶️"
+            action = QAction(f"{icon} {speed:.2f}x", self)
             action.setCheckable(True)
-            action.setData(self.available_speeds.index(speed))
+            action.setChecked(speed == 1.0)  # Marcar 1.0x como padrão
+            action.setData(i)  # Usando o índice como dado
             speed_group.addAction(action)
             self.speed_menu.addAction(action)
-            action.triggered.connect(lambda checked, s=speed: self.set_playback_speed(self.available_speeds.index(s)))
-
-        self.speed_menu.addSeparator()
-
-        # Velocidade normal (1.0x)
-        normal_action = QAction("▶️ 1.00x", self)
-        normal_action.setCheckable(True)
-        normal_action.setChecked(True)
-        normal_action.setData(3)
-        speed_group.addAction(normal_action)
-        self.speed_menu.addAction(normal_action)
-        normal_action.triggered.connect(lambda checked: self.set_playback_speed(3))
-
-        self.speed_menu.addSeparator()
-
-        # Velocidades rápidas com ícones
-        for speed in self.available_speeds[4:]:
-            action = QAction(f"⏩ {speed:.2f}x", self)
-            action.setCheckable(True)
-            action.setData(self.available_speeds.index(speed))
-            speed_group.addAction(action)
-            self.speed_menu.addAction(action)
-            action.triggered.connect(lambda checked, s=speed: self.set_playback_speed(self.available_speeds.index(s)))
+            # Conectar usando lambda com captura correta do índice
+            action.triggered.connect(lambda checked, s=speed, i=i: self.set_playback_speed(i))
 
         # Botão de velocidade com estilo personalizado
-        self.speed_button = QPushButton("1.00x")
+        self.speed_button = QPushButton("▶️ 1.00x")
         self.speed_button.setObjectName("speed_button")
         self.speed_button.setFixedSize(80, 40)
         self.speed_button.clicked.connect(self.show_speed_menu)
@@ -295,6 +276,96 @@ class PreviewWidget(QFrame):
         controls_layout.addWidget(self.play_button)
         controls_layout.addWidget(self.stop_button)
         controls_layout.addWidget(self.speed_button)
+        controls_layout.addStretch()
+
+        # Menu de áudio com controles de volume
+        self.audio_menu = QMenu(self)
+        self.audio_menu.setStyleSheet("""
+            QMenu {
+                background-color: #2D2D2D;
+                color: white;
+                border: 1px solid #404040;
+                border-radius: 6px;
+                padding: 8px;
+            }
+            QMenu::item {
+                padding: 8px 25px 8px 15px;
+                border-radius: 4px;
+                margin: 2px 4px;
+            }
+            QMenu::item:selected {
+                background-color: #404040;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #404040;
+                margin: 6px 0px;
+            }
+        """)
+
+        # Slider de volume no menu
+        volume_widget = QWidget()
+        volume_layout = QHBoxLayout(volume_widget)
+        volume_layout.setContentsMargins(10, 5, 10, 5)
+
+        self.volume_slider = QSlider(Qt.Horizontal)
+        self.volume_slider.setRange(0, 100)
+        self.volume_slider.setValue(100)
+        self.volume_slider.setFixedWidth(150)
+        self.volume_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: none;
+                height: 6px;
+                background: #333333;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #4CAF50;
+                border: none;
+                width: 16px;
+                height: 16px;
+                margin: -5px 0;
+                border-radius: 8px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #4CAF50;
+                border-radius: 3px;
+            }
+        """)
+        self.volume_slider.valueChanged.connect(self.set_volume)
+
+        volume_layout.addWidget(QLabel("🔈"))  # Ícone de volume
+        volume_layout.addWidget(self.volume_slider)
+        volume_layout.addWidget(QLabel("🔊"))  # Ícone de volume alto
+
+        volume_action = QWidgetAction(self)
+        volume_action.setDefaultWidget(volume_widget)
+        self.audio_menu.addAction(volume_action)
+        
+        # Ação de Mute
+        self.mute_action = QAction("🔇 Mudo", self)
+        self.mute_action.setCheckable(True)
+        self.mute_action.triggered.connect(self.toggle_mute)
+        self.audio_menu.addAction(self.mute_action)
+
+        # Inicialização do volume
+        self.last_volume = 100
+        self.volume_slider.setValue(100)
+
+        # Conectar eventos de volume
+        self.volume_slider.valueChanged.connect(lambda v: self.set_volume(v))
+        self.mute_action.triggered.connect(lambda checked: self.toggle_mute())
+
+        # Botão de volume com estilo personalizado
+        self.volume_button = QPushButton("🔊")
+        self.volume_button.setObjectName("volume_button")
+        self.volume_button.setFixedSize(40, 40)
+        self.volume_button.clicked.connect(self.show_volume_menu)
+        self.volume_button.setStyleSheet(button_style)
+        self.volume_button.setToolTip("Controle de Volume")
+
+        # Adicionar o botão de volume ao layout de controles
+        controls_layout.addWidget(self.volume_button)
         controls_layout.addStretch()
 
         progress_layout.addWidget(controls_container)
@@ -334,6 +405,10 @@ class PreviewWidget(QFrame):
         """Mostra o menu de velocidade abaixo do botão"""
         pos = self.speed_button.mapToGlobal(self.speed_button.rect().bottomLeft())
         self.speed_menu.popup(pos)
+
+    def show_volume_menu(self):
+        pos = self.volume_button.mapToGlobal(self.volume_button.rect().bottomLeft())
+        self.audio_menu.popup(pos)
 
     def load_video(self, file_path):
         try:
@@ -520,35 +595,13 @@ class PreviewWidget(QFrame):
             speed = self.available_speeds[speed_index]
             print(f"Alterando velocidade para: {speed}x")
             
-            # Adicionar pequeno delay antes de alterar a velocidade
-            time.sleep(0.1)
-            
             if self.player.set_rate(float(speed)):
                 self.current_speed_index = speed_index
                 self.playback_speed = speed
                 
-                # Atualizar texto do botão com indicador visual baseado na velocidade
-                if speed < 1:
-                    speed_text = f"⏪ {speed:.2f}x"
-                elif speed > 1:
-                    speed_text = f"⏩ {speed:.2f}x"
-                else:
-                    speed_text = f"▶️ {speed:.2f}x"
-                
+                # Atualizar texto do botão de forma simples e direta
+                speed_text = f"▶️ {speed:.2f}x"
                 self.speed_button.setText(speed_text)
-                self.speed_button.setStyleSheet(f"""
-                    #speed_button {{
-                        background-color: #2D2D2D;
-                        color: {self.get_speed_color(speed)};
-                        border: 1px solid {self.get_speed_color(speed)};
-                        border-radius: 6px;
-                        padding: 6px 12px;
-                        font-weight: bold;
-                    }}
-                    #speed_button:hover {{
-                        background-color: #353535;
-                    }}
-                """)
                 
                 # Atualizar o estado checked no menu
                 for action in self.speed_menu.actions():
@@ -643,3 +696,54 @@ class PreviewWidget(QFrame):
             return '#4CAF50'  # Verde para velocidades rápidas
         else:
             return '#2196F3'  # Azul para velocidade normal
+
+    def set_volume(self, value):
+        """Define o volume do player (0-100)"""
+        try:
+            if self.player:
+                if self.player.set_volume(value):
+                    self.update_volume_icon(value)
+                    if value > 0 and self.mute_action.isChecked():
+                        self.mute_action.setChecked(False)
+                    print(f"Volume alterado para: {value}%")
+                    return True
+                else:
+                    print(f"Falha ao alterar volume para: {value}%")
+            return False
+        except Exception as e:
+            print(f"Erro ao alterar volume: {e}")
+            return False
+
+    def toggle_mute(self):
+        """Ativa/desativa o mudo"""
+        try:
+            if self.player:
+                is_muted = self.mute_action.isChecked()
+                if is_muted:
+                    # Salvar volume atual antes de mutar
+                    self.last_volume = self.volume_slider.value()
+                    self.player.set_mute(True)
+                    self.volume_slider.setValue(0)
+                    self.volume_button.setText("🔇")
+                else:
+                    # Restaurar último volume
+                    last_vol = getattr(self, 'last_volume', 100)
+                    self.player.set_mute(False)
+                    self.player.set_volume(last_vol)
+                    self.volume_slider.setValue(last_vol)
+                    self.update_volume_icon(last_vol)
+                
+                print(f"Mudo: {'ativado' if is_muted else 'desativado'}")
+        except Exception as e:
+            print(f"Erro ao alternar mudo: {e}")
+            self.mute_action.setChecked(False)
+
+    def update_volume_icon(self, value):
+        if value == 0:
+            self.volume_button.setText("🔇")
+        elif value < 30:
+            self.volume_button.setText("🔈")
+        elif value < 70:
+            self.volume_button.setText("🔉")
+        else:
+            self.volume_button.setText("🔊")

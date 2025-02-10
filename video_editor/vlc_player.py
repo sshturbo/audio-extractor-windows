@@ -36,6 +36,9 @@ class VLCPlayer:
                 self.player.set_hwnd(display_widget.winId())
             elif sys.platform == "darwin":
                 self.player.set_nsobject(int(display_widget.winId()))
+        
+        # Definir volume inicial
+        self.player.audio_set_volume(100)
 
     def load(self, file_path):
         """Carrega um arquivo de mídia"""
@@ -65,6 +68,9 @@ class VLCPlayer:
             # Aplicar mídia ao player
             self.player.set_media(media)
             
+            # Configurar volume inicial
+            self.player.audio_set_volume(100)
+            
             # Aguardar a mídia ser carregada
             time.sleep(0.5)
             
@@ -80,23 +86,29 @@ class VLCPlayer:
 
     def play(self):
         """Inicia a reprodução"""
-        self.player.play()
+        if self.player:
+            self.player.play()
 
     def pause(self):
         """Pausa a reprodução"""
-        self.player.pause()
+        if self.player:
+            self.player.pause()
 
     def stop(self):
         """Para a reprodução"""
-        self.player.stop()
+        if self.player:
+            self.player.stop()
 
     def set_position(self, position):
         """Define a posição da reprodução (0.0 a 1.0)"""
-        self.player.set_position(position)
+        if self.player:
+            self.player.set_position(position)
 
     def get_position(self):
         """Obtém a posição atual da reprodução (0.0 a 1.0)"""
-        return self.player.get_position()
+        if self.player:
+            return self.player.get_position()
+        return 0
 
     def set_rate(self, rate):
         """Define a velocidade de reprodução"""
@@ -135,8 +147,9 @@ class VLCPlayer:
     def get_rate(self):
         """Obtém a velocidade atual de reprodução"""
         try:
-            rate = self.player.get_rate()
-            return float(rate) if rate is not None else 1.0
+            if self.player:
+                rate = self.player.get_rate()
+                return float(rate) if rate is not None else 1.0
         except Exception as e:
             print(f"Erro ao obter velocidade: {e}")
             return 1.0
@@ -144,14 +157,15 @@ class VLCPlayer:
     def get_length(self):
         """Obtém a duração total em milissegundos"""
         try:
-            length = self.player.get_length()
-            if length <= 0:
-                # Tentar obter a duração da mídia diretamente
-                media = self.player.get_media()
-                if (media):
-                    media.parse()
-                    length = media.get_duration()
-            return max(0, length)
+            if self.player:
+                length = self.player.get_length()
+                if length <= 0:
+                    # Tentar obter a duração da mídia diretamente
+                    media = self.player.get_media()
+                    if (media):
+                        media.parse()
+                        length = media.get_duration()
+                return max(0, length)
         except Exception as e:
             print(f"Erro ao obter duração: {e}")
             return 0
@@ -159,8 +173,9 @@ class VLCPlayer:
     def get_time(self):
         """Obtém o tempo atual em milissegundos"""
         try:
-            time = self.player.get_time()
-            return max(0, time if time is not None else 0)
+            if self.player:
+                time = self.player.get_time()
+                return max(0, time if time is not None else 0)
         except Exception as e:
             print(f"Erro ao obter tempo atual: {e}")
             return 0
@@ -168,25 +183,57 @@ class VLCPlayer:
     def set_time(self, time_ms):
         """Define o tempo atual em milissegundos"""
         try:
-            # Garantir que o tempo está dentro dos limites
-            duration = self.get_length()
-            time_ms = max(0, min(time_ms, duration))
-            
-            # Aplicar o tempo
-            self.player.set_time(int(time_ms))
-            
-            # Pequena pausa para o seek completar
-            time.sleep(0.05)
-            
-            return True
+            if self.player:
+                # Garantir que o tempo está dentro dos limites
+                duration = self.get_length()
+                time_ms = max(0, min(time_ms, duration))
+                
+                # Aplicar o tempo
+                self.player.set_time(int(time_ms))
+                
+                # Pequena pausa para o seek completar
+                time.sleep(0.05)
+                
+                return True
         except Exception as e:
             print(f"Erro ao definir tempo: {e}")
             return False
 
     def is_playing(self):
         """Verifica se está reproduzindo"""
-        return self.player.is_playing()
+        if self.player:
+            return self.player.is_playing()
+        return False
+
+    def set_volume(self, volume):
+        """Define o volume do player (0-100)"""
+        try:
+            if self.player:
+                return self.player.audio_set_volume(int(volume))
+            return False
+        except Exception as e:
+            print(f"Erro ao definir volume: {e}")
+            return False
+
+    def get_volume(self):
+        """Obtém o volume atual do player (0-100)"""
+        if self.player:
+            return self.player.audio_get_volume()
+        return 0
+
+    def is_muted(self):
+        """Verifica se o áudio está mutado"""
+        if self.player:
+            return self.player.audio_get_mute()
+        return False
+
+    def set_mute(self, mute):
+        """Define o estado mudo do áudio"""
+        if self.player:
+            return self.player.audio_set_mute(mute)
+        return False
 
     def release(self):
         """Libera os recursos do player"""
-        self.player.release()
+        if self.player:
+            self.player.release()
