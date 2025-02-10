@@ -12,7 +12,7 @@ scikit-learn==1.6.1
 torch>=2.0.0
 torchaudio==2.6.0
 ffpyplayer>=4.3.5
-av==14.1.0
+av>=10.0.0
 opencv-python>=4.5.0
 python-vlc>=3.0.0
 tqdm>=4.65.0

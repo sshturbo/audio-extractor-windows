@@ -10,7 +10,21 @@ def signal_handler(signum, frame):
     """Manipula sinais de interrupção"""
     QApplication.quit()
 
+def check_vlc():
+    try:
+        import vlc
+        return True
+    except ImportError:
+        QMessageBox.critical(None, "Erro de Dependência",
+                           "VLC não encontrado. Por favor, instale o VLC media player e o python-vlc:\n"
+                           "1. Instale o VLC de https://www.videolan.org/\n"
+                           "2. Execute: pip install python-vlc")
+        return False
+
 def main():
+    if not check_vlc():
+        sys.exit(1)
+
     # Garantir que o modelo está baixado antes de iniciar
     download_silero_model()
     

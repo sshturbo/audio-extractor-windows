@@ -12,6 +12,7 @@ from worker import AudioProcessingWorker
 import sys
 import os
 from video_player import VideoPlayer
+from editor_window import VideoEditor  # Adicionando importação do VideoEditor
 from video_editor.clipchamp_editor import ClipchampEditor
 
 def load_stylesheet(filename):
@@ -450,17 +451,16 @@ class MainWindow(QMainWindow):
 
     def open_editor(self):
         """Abre o editor de vídeo com o projeto atual"""
+        # Iniciar editor sem passar arquivos automaticamente
+        self.editor = VideoEditor()
+        self.editor.show()
+        
+        # Se existir um projeto, apenas preparar o áudio
         if self.current_project:
-            video_file = Path(self.current_project['original_video'])
             audio_file = Path(self.current_project['audio_file'])
-            
-            if video_file.exists() and audio_file.exists():
-                self.editor = ClipchampEditor(self.current_project)
-                self.editor.show()
-            else:
-                QMessageBox.warning(self, "Aviso", "Arquivos de vídeo ou áudio não encontrados.")
-        else:
-            QMessageBox.warning(self, "Aviso", "Nenhum projeto carregado.")
+            if audio_file.exists():
+                self.editor.audio_file = str(audio_file)
+                self.editor.setup_audio_player()
 
     def segment_selected(self, item):
         """Callback quando um segmento é selecionado"""
