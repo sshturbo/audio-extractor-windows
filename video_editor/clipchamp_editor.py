@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QMenuBar, QMenu, QSizeGrip, QSizePolicy, QActionGroup) 
 from PyQt5.QtCore import Qt, QSize, QTimer 
 from PyQt5.QtGui import QIcon, QColor
+import datetime
 from .timeline_widget import MultiTrackTimeline
 from .preview_widget import PreviewWidget
 from .media_bin import MediaBin
@@ -14,96 +15,152 @@ class ClipchampEditor(QMainWindow):
         super().__init__()
         self.project_data = project_data
         self.setWindowTitle("Editor de Vídeo")
-        self.is_button_enabled = True  # Novo atributo para controlar o estado do botão
-        self.button_timer = QTimer()  # Timer para reabilitar o botão
-        self.button_timer.timeout.connect(self.enable_playback_button)
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #1E1E1E;
+                background-color: #1A1A1A;
             }
             QMenuBar {
-                background-color: #333333;
-                color: white;
-                padding: 5px;
-                font-size: 12px;
+                background-color: #2D2D2D;
+                color: #E0E0E0;
+                padding: 6px;
+                font-size: 13px;
+                border-bottom: 1px solid #404040;
             }
             QMenuBar::item {
-                padding: 5px 10px;
-                margin-right: 5px;
+                padding: 6px 12px;
+                margin-right: 4px;
                 background-color: transparent;
-            }
-            QMenuBar::item:selected {
-                background-color: #404040;
                 border-radius: 4px;
             }
+            QMenuBar::item:selected {
+                background-color: #3D3D3D;
+                color: #FFFFFF;
+            }
             QMenu {
-                background-color: #333333;
-                color: white;
+                background-color: #2D2D2D;
+                color: #E0E0E0;
                 border: 1px solid #404040;
+                padding: 5px;
+                border-radius: 6px;
             }
             QMenu::item {
-                padding: 5px 20px;
+                padding: 8px 25px;
+                border-radius: 4px;
             }
             QMenu::item:selected {
-                background-color: #404040;
+                background-color: #0078D4;
+                color: white;
             }
             QLabel {
-                color: #FFFFFF;
-                font-size: 12px;
-                font-weight: bold;
+                color: #E0E0E0;
+                font-size: 13px;
+                font-weight: 500;
             }
             QPushButton {
                 background-color: #0078D4;
                 color: white;
                 border: none;
-                padding: 8px 15px;
-                border-radius: 4px;
-                font-size: 12px;
-                min-width: 80px;
-                margin: 2px;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 500;
+                min-width: 90px;
+                margin: 3px;
             }
             QPushButton:hover {
-                background-color: #1084D9;
+                background-color: #2B88D9;
             }
             QPushButton:pressed {
                 background-color: #006CBE;
             }
+            QPushButton:disabled {
+                background-color: #4A4A4A;
+                color: #8D8D8D;
+            }
             QListWidget {
-                background-color: #252526;
-                color: white;
-                border: 1px solid #333333;
-                border-radius: 4px;
-                padding: 5px;
+                background-color: #2D2D2D;
+                color: #E0E0E0;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 13px;
             }
             QListWidget::item {
-                padding: 5px;
-                margin: 2px;
+                padding: 8px;
+                margin: 3px;
+                border-radius: 4px;
             }
             QListWidget::item:hover {
-                background-color: #2D2D2D;
+                background-color: #3D3D3D;
             }
             QListWidget::item:selected {
                 background-color: #0078D4;
+                color: white;
             }
             QToolBar {
-                background-color: #333333;
+                background-color: #2D2D2D;
                 border: none;
-                spacing: 10px;
-                padding: 5px;
+                spacing: 12px;
+                padding: 8px;
+                border-bottom: 1px solid #404040;
             }
             QToolButton {
                 background-color: transparent;
                 border: none;
-                padding: 5px;
-                border-radius: 4px;
+                padding: 6px;
+                border-radius: 6px;
+                margin: 2px;
             }
             QToolButton:hover {
+                background-color: #3D3D3D;
+            }
+            QToolButton:pressed {
                 background-color: #404040;
             }
+            QSplitter::handle {
+                background-color: #404040;
+                width: 1px;
+                height: 1px;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background-color: #2D2D2D;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #4D4D4D;
+                min-height: 30px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #5D5D5D;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar:horizontal {
+                border: none;
+                background-color: #2D2D2D;
+                height: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #4D4D4D;
+                min-width: 30px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #5D5D5D;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+            QFrame {
+                border-radius: 8px;
+            }
         """)
-        self.speed_menu = None  # Inicializar o menu de velocidade como None
         self.setup_ui()
-        self.setup_connections()  # Nova chamada para configurar conexões
         self.create_menu_bar()
         
     def create_menu_bar(self):
@@ -133,16 +190,10 @@ class ClipchampEditor(QMainWindow):
     def setup_ui(self):
         self.setMinimumSize(1280, 720)
         
-        # Inicializar componentes antes de usar
+        # Inicializar componentes
         self.media_bin = MediaBin()
         self.preview = PreviewWidget()
         self.timeline = MultiTrackTimeline()
-        
-        # Botões de controle
-        self.rewind_btn = QPushButton("⏪")
-        self.play_btn = QPushButton("⏵")
-        self.stop_btn = QPushButton("⏹")
-        self.forward_btn = QPushButton("⏩")
         
         # Widget central com splitters
         central_widget = QWidget()
@@ -192,57 +243,66 @@ class ClipchampEditor(QMainWindow):
         # Carregar projeto se fornecido
         if self.project_data:
             self.load_project(self.project_data)
-            
-        # Conectar sinais dos botões
-        self.play_btn.clicked.connect(self.toggle_playback)
-        self.stop_btn.clicked.connect(self.stop_playback)
-
-        # Atualizar os botões com press and hold
-        self.rewind_btn.pressed.connect(self.start_rewind)
-        self.rewind_btn.released.connect(self.stop_fast_playback)
-        
-        self.forward_btn.pressed.connect(self.start_fast_forward)
-        self.forward_btn.released.connect(self.stop_fast_playback)
-
-    def setup_connections(self):
-        """Configura todas as conexões de sinais e slots"""
-        # Conectar controles de playback
-        if hasattr(self, 'play_btn'):
-            self.play_btn.clicked.connect(self.toggle_playback)
-        if hasattr(self, 'stop_btn'):
-            self.stop_btn.clicked.connect(self.stop_playback)
-        if hasattr(self, 'rewind_btn'):
-            self.rewind_btn.pressed.connect(self.start_rewind)
-            self.rewind_btn.released.connect(self.stop_fast_playback)
-        if hasattr(self, 'forward_btn'):
-            self.forward_btn.pressed.connect(self.start_fast_forward)
-            self.forward_btn.released.connect(self.stop_fast_playback)
 
     def create_left_panel(self):
         left_panel = QWidget()
-        left_panel.setFixedWidth(280)
+        left_panel.setFixedWidth(300)  # Aumentado para mais espaço
         left_panel.setStyleSheet("""
             QWidget {
-                background-color: #252526;
-                border-radius: 8px;
+                background-color: #2D2D2D;
+                border-radius: 10px;
             }
         """)
         left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(10, 10, 10, 10)
-        left_layout.setSpacing(10)
+        left_layout.setContentsMargins(15, 15, 15, 15)
+        left_layout.setSpacing(12)
         
-        # Media Browser com título mais visível
+        # Media Browser com título mais elegante
         media_title = QLabel("MÍDIA")
-        media_title.setStyleSheet("color: #0078D4; font-size: 14px; margin-top: 10px;")
+        media_title.setStyleSheet("""
+            color: #0078D4;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 5px 0;
+            border-bottom: 2px solid #0078D4;
+        """)
         left_layout.addWidget(media_title)
         left_layout.addWidget(self.media_bin)
         
         # Efeitos com título destacado
         effects_title = QLabel("EFEITOS")
-        effects_title.setStyleSheet("color: #0078D4; font-size: 14px; margin-top: 20px;")
+        effects_title.setStyleSheet("""
+            color: #0078D4;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 5px 0;
+            margin-top: 10px;
+            border-bottom: 2px solid #0078D4;
+        """)
         left_layout.addWidget(effects_title)
         
         self.effects_list = QListWidget()
+        self.effects_list.setStyleSheet("""
+            QListWidget {
+                background-color: #252526;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QListWidget::item {
+                color: #E0E0E0;
+                padding: 10px;
+                margin: 2px 0;
+                border-radius: 6px;
+            }
+            QListWidget::item:hover {
+                background-color: #3D3D3D;
+            }
+            QListWidget::item:selected {
+                background-color: #0078D4;
+                color: white;
+            }
+        """)
         self.effects_list.addItems([
             "🎨 Filtros de Cor",
             "🔄 Transições",
@@ -258,268 +318,33 @@ class ClipchampEditor(QMainWindow):
         preview_container = QFrame()
         preview_container.setStyleSheet("""
             QFrame {
-                background-color: #1A1A1A;
-                border: 1px solid #333333;
-                border-radius: 8px;
+                background-color: #252526;
+                border: 1px solid #404040;
+                border-radius: 10px;
             }
         """)
         preview_layout = QVBoxLayout(preview_container)
-        preview_layout.setContentsMargins(10, 10, 10, 10)
-        preview_layout.setSpacing(0)  # Reduzir espaçamento vertical
+        preview_layout.setContentsMargins(15, 15, 15, 15)
+        preview_layout.setSpacing(0)
         
-        # Container do preview
+        # Container do preview com sombra
         preview_inner = QFrame()
+        preview_inner.setStyleSheet("""
+            QFrame {
+                background-color: #1A1A1A;
+                border-radius: 8px;
+            }
+        """)
         preview_inner.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         preview_inner_layout = QVBoxLayout(preview_inner)
-        preview_inner_layout.setSpacing(0)  # Reduzir espaçamento vertical
+        preview_inner_layout.setSpacing(0)
         
-        # Preview widget
         self.preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         preview_inner_layout.addWidget(self.preview)
         
-        # Controles de playback
-        controls = QHBoxLayout()
-        controls.setContentsMargins(10, 5, 10, 5)
-        controls.setSpacing(8)  # Espaçamento entre botões
-        
-        # Estilo comum para os botões
-        button_style = """
-            QPushButton {
-                background-color: #333333;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 12px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: #404040;
-            }
-            QPushButton:pressed {
-                background-color: #505050;
-            }
-            QPushButton#speedButton {
-                min-width: 80px;
-                padding: 4px 12px;
-                font-weight: bold;
-                margin-left: 10px;
-                background-color: #1E1E1E;
-                border: 1px solid #404040;
-            }
-            QPushButton#speedButton:hover {
-                background-color: #2D2D2D;
-                border-color: #505050;
-            }
-        """
-        
-        self.rewind_btn = QPushButton("⏪")
-        self.play_btn = QPushButton("⏵")
-        self.stop_btn = QPushButton("⏹")
-        self.forward_btn = QPushButton("⏩")
-        self.speed_btn = QPushButton("1.0x")  # Botão de velocidade
-        self.speed_btn.setObjectName("speedButton")
-
-        # Menu de velocidade com ícones e itens mais intuitivos
-        self.speed_menu = QMenu(self)
-        self.speed_menu.setStyleSheet("""
-            QMenu {
-                background-color: #333333;
-                color: white;
-                border: 1px solid #404040;
-                padding: 5px;
-                min-width: 150px;
-            }
-            QMenu::item {
-                padding: 8px 20px;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
-                background-color: #404040;
-            }
-            QMenu::item:checked {
-                color: #0078D4;
-                font-weight: bold;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #404040;
-                margin: 5px 0px;
-            }
-        """)
-        
-        # Adicionar opções de velocidade com checkmarks e ícones
-        speed_group = QActionGroup(self)
-        speed_group.setExclusive(True)
-        
-        speeds = [
-            ("Muito Lento (0.25x)", 0.25),
-            ("Lento (0.5x)", 0.5),
-            ("Devagar (0.75x)", 0.75),
-            ("Normal (1.0x)", 1.0),
-            ("Rápido (1.5x)", 1.5),
-            ("Muito Rápido (2.0x)", 2.0)
-        ]
-        
-        for speed_text, speed_value in speeds:
-            action = QAction(speed_text, self)
-            action.setCheckable(True)
-            action.setData(speed_value)
-            if speed_value == 1.0:
-                action.setChecked(True)
-            speed_group.addAction(action)
-            self.speed_menu.addAction(action)
-            action.triggered.connect(lambda checked, v=speed_value, t=speed_text: self.change_speed(v, t))
-            
-        # Personalizar botão de velocidade
-        self.speed_btn.setStyleSheet(button_style + """
-            QPushButton#speedButton {
-                min-width: 80px;
-                padding: 4px 12px;
-                font-weight: bold;
-                background-color: #333333;
-                color: white;
-            }
-            QPushButton#speedButton:hover {
-                background-color: #404040;
-            }
-        """)
-        self.speed_btn.setFixedWidth(80)
-        self.speed_btn.clicked.connect(self.show_speed_menu)
-        
-        for btn in [self.rewind_btn, self.play_btn, self.stop_btn, self.forward_btn, self.speed_btn]:
-            btn.setFixedHeight(32)
-            if btn != self.speed_btn:
-                btn.setFixedSize(32, 32)
-            btn.setStyleSheet(button_style)
-            controls.addWidget(btn)
-        
-        # Configurar layout dos controles
-        controls = QHBoxLayout()
-        controls.setContentsMargins(10, 5, 10, 5)
-        controls.setSpacing(8)  # Espaçamento entre botões
-        
-        # Adicionar botões na ordem correta
-        controls.addStretch(1)  # Espaço flexível no início
-        controls.addWidget(self.rewind_btn)
-        controls.addWidget(self.play_btn)
-        controls.addWidget(self.stop_btn)
-        controls.addWidget(self.forward_btn)
-        controls.addWidget(self.speed_btn)
-        controls.addStretch(1)  # Espaço flexível no final
-
-        # Conectar sinais
-        self.play_btn.clicked.connect(self.toggle_playback)
-        self.stop_btn.clicked.connect(self.stop_playback)
-        
-        # Configurar press and hold para avanço/retrocesso
-        self.rewind_btn.pressed.connect(self.start_rewind)
-        self.rewind_btn.released.connect(self.stop_fast_playback)
-        
-        self.forward_btn.pressed.connect(self.start_fast_forward)
-        self.forward_btn.released.connect(self.stop_fast_playback)
-        
-        # Centralizar os controles
-        controls.addStretch(1)
-        controls_widget = QWidget()
-        controls_widget.setLayout(controls)
-        controls.addStretch(1)
-        
-        preview_inner_layout.addWidget(controls_widget)
         preview_layout.addWidget(preview_inner)
         
         return preview_container
-
-    # Adicionar métodos de controle
-    def enable_playback_button(self):
-        """Reabilita o botão de playback após o delay"""
-        self.is_button_enabled = True
-        self.button_timer.stop()
-
-    def toggle_playback(self):
-        if not self.is_button_enabled:
-            return
-
-        if hasattr(self, 'preview') and self.preview.player:
-            try:
-                print("Alternando reprodução...")
-                self.is_button_enabled = False  # Desabilita temporariamente
-
-                if not self.preview.is_playing:
-                    self.preview.play()
-                    if self.preview.is_playing:
-                        self.play_btn.setText("⏸")
-                else:
-                    self.preview.pause()
-                    if not self.preview.is_playing:
-                        self.play_btn.setText("⏵")
-
-                print(f"Estado atual: {'reproduzindo' if self.preview.is_playing else 'pausado'}")
-                self.button_timer.start(300)  # Reabilita após 300ms
-
-            except Exception as e:
-                print(f"Erro ao alternar reprodução: {e}")
-                self.play_btn.setText("⏵")
-                self.is_button_enabled = True
-
-    def stop_playback(self):
-        if hasattr(self, 'preview') and self.preview.player:
-            try:
-                print("Parando reprodução...")
-                self.preview.stop()
-                self.play_btn.setText("⏵")
-                print("Reprodução parada")
-            except Exception as e:
-                print(f"Erro ao parar reprodução: {e}")
-
-    def start_rewind(self):
-        """Inicia retrocesso rápido"""
-        if hasattr(self, 'preview') and self.preview.player:
-            self.preview.start_rewind()
-            self.rewind_btn.setStyleSheet(self.rewind_btn.styleSheet() + "background-color: #505050;")
-
-    def start_fast_forward(self):
-        """Inicia avanço rápido"""
-        if hasattr(self, 'preview') and self.preview.player:
-            self.preview.start_fast_forward()
-            self.forward_btn.setStyleSheet(self.forward_btn.styleSheet() + "background-color: #505050;")
-
-    def stop_fast_playback(self):
-        """Para avanço/retrocesso rápido"""
-        if hasattr(self, 'preview') and self.preview.player:
-            self.preview.stop_fast_playback()
-            # Restaurar estilo original dos botões
-            button_style = """
-                background-color: #333333;
-                color: white;
-                border: none;
-                border-radius: 16px;
-                font-size: 14px;
-                padding: 4px;
-            """
-            self.rewind_btn.setStyleSheet(button_style)
-            self.forward_btn.setStyleSheet(button_style)
-
-    def show_speed_menu(self):
-        """Mostra o menu de velocidade abaixo do botão"""
-        if self.speed_menu:
-            pos = self.speed_btn.mapToGlobal(self.speed_btn.rect().bottomLeft())
-            self.speed_menu.popup(pos)
-
-    def change_speed(self, speed_value, speed_text):
-        """Altera a velocidade de reprodução"""
-        if hasattr(self, 'preview') and self.preview.player:
-            try:
-                self.preview.set_playback_speed(speed_value)
-                # Extrair apenas o valor numérico para exibir no botão
-                speed_display = f"{speed_value:.2f}x"
-                self.speed_btn.setText(speed_display)
-
-                # Atualizar o checkmark no menu
-                for action in self.speed_menu.actions():
-                    action.setChecked(action.data() == speed_value)
-
-            except Exception as e:
-                print(f"Erro ao alterar velocidade: {e}")
 
     def create_toolbar(self):
         toolbar = QToolBar()
@@ -567,9 +392,6 @@ class ClipchampEditor(QMainWindow):
                 
                 # Adicionar à timeline
                 self.timeline.add_clip(video_file, 0, 0)  # tempo 0, trilha 0
-                
-                # Garantir que os controles estejam no estado correto
-                self.play_btn.setText("⏵")
                 print("Projeto carregado com sucesso")
                 
         except Exception as e:

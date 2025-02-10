@@ -26,6 +26,7 @@ class VideoPlayer(QFrame):
         self.player = None
         self.is_playing = False
         self.duration = 0
+        self.selected_video = None  # Armazenar o caminho do vídeo selecionado
         
         # Carregar stylesheet
         self.setStyleSheet(load_stylesheet('video_player.css'))
@@ -199,22 +200,26 @@ class VideoPlayer(QFrame):
             return False
 
     def toggle_play(self):
-        if not self.player:
-            return
-            
-        try:
-            if self.is_playing:
-                self.player.pause()
-                self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
-            else:
-                self.player.play()
-                self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
-            
-            self.is_playing = not self.is_playing
-            
-        except Exception as e:
-            print(f"Erro ao alternar reprodução: {e}")
-            traceback.print_exc()
+        if not self.player and self.selected_video:
+            # Se o player não existe mas tem um vídeo selecionado, carrega e reproduz
+            self.load_video(self.selected_video)
+            self.play()
+            self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+        elif self.player:
+            # Se o player já existe, alterna entre play/pause
+            try:
+                if self.is_playing:
+                    self.player.pause()
+                    self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+                else:
+                    self.player.play()
+                    self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+                
+                self.is_playing = not self.is_playing
+                
+            except Exception as e:
+                print(f"Erro ao alternar reprodução: {e}")
+                traceback.print_exc()
 
     def stop(self):
         if not self.player:

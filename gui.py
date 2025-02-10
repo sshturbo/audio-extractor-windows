@@ -271,12 +271,8 @@ class MainWindow(QMainWindow):
                 
             self.status_label.setText("Projeto carregado com sucesso!")
             
-            # Carregar vídeo se disponível
-            video_file = Path(self.current_project['original_video'])
-            if video_file.exists():
-                self.video_player.load_video(str(video_file))
-            
-            self.update_videos_list()  # Atualizar lista de vídeos
+            # Apenas atualizar a lista de vídeos sem carregar o vídeo
+            self.update_videos_list()
 
     def load_transcription(self):
         """Carrega a transcrição do projeto atual"""
@@ -596,7 +592,7 @@ class MainWindow(QMainWindow):
         try:
             # Adicionar vídeo original
             original_video = Path(self.current_project['original_video'])
-            if original_video.exists():
+            if (original_video.exists()):
                 item = QListWidgetItem(f"📼 {original_video.name}")
                 item.setData(Qt.UserRole, str(original_video))
                 self.videos_list.addItem(item)
@@ -605,10 +601,17 @@ class MainWindow(QMainWindow):
             print(f"Erro ao atualizar lista de vídeos: {e}")
 
     def select_video_from_list(self, item):
-        """Carrega o vídeo selecionado da lista"""
+        """Seleciona o vídeo da lista mas não carrega automaticamente"""
         video_path = item.data(Qt.UserRole)
         if video_path:
-            self.video_player.load_video(video_path)
+            self.video_player.selected_video = video_path  # Apenas armazena o caminho
+            print(f"Vídeo selecionado: {video_path}")
+
+    def play_selected_video(self):
+        """Carrega e reproduz o vídeo selecionado"""
+        if hasattr(self.video_player, 'selected_video'):
+            self.video_player.load_video(self.video_player.selected_video)
+            self.video_player.play()
 
     def show_video_editor(self):
         """Abre o editor de vídeo com o projeto atual"""
