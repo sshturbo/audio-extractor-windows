@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QPushButton, QLabel, QFrame, QSplitter, QScrollArea,
                            QToolBar, QAction, QFileDialog, QDockWidget, QListWidget,
-                           QMenuBar, QMenu, QSizeGrip, QSizePolicy, QActionGroup)  # Adicionado QActionGroup
-from PyQt5.QtCore import Qt, QSize, QTimer  # Adicionado QTimer
+                           QMenuBar, QMenu, QSizeGrip, QSizePolicy, QActionGroup) 
+from PyQt5.QtCore import Qt, QSize, QTimer 
 from PyQt5.QtGui import QIcon, QColor
 from .timeline_widget import MultiTrackTimeline
 from .preview_widget import PreviewWidget

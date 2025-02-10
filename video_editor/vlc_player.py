@@ -5,26 +5,27 @@ import sys
 
 class VLCPlayer:
     def __init__(self, display_widget):
-        # Configurações adicionais para melhor performance
+        # Configurações simplificadas e atualizadas para compatibilidade
         self.instance = vlc.Instance([
-            '--no-xlib',  # Reduzir latência
-            '--quiet',    # Reduzir logs
-            '--audio-pitch-compensation',  # Manter o pitch do áudio constante
-            '--clock-synchro=0',  # Sincronização precisa
-            '--no-snapshot-preview',  # Desabilitar preview
-            '--live-caching=50',  # Reduzir buffer live
-            '--network-caching=50',  # Reduzir buffer de rede
-            '--file-caching=50',  # Reduzir buffer de arquivo
-            '--disc-caching=50',  # Reduzir buffer de disco
-            '--sout-mux-caching=50',  # Reduzir buffer de muxing
-            '--vout-filter=deinterlace',  # Melhorar qualidade
-            '--deinterlace-mode=blend',  # Modo de desentrelaçamento
-            '--preferred-resolution=-1',  # Resolução nativa
-            '--avcodec-threads=0',  # Threads automático
-            '--avcodec-hw=any',  # Usar qualquer aceleração de hardware
-            '--high-priority',  # Alta prioridade
+            '--quiet',                 # Reduzir logs
+            '--no-xlib',              # Reduzir latência
+            '--audio-resampler=soxr',  # Resampler de alta qualidade
+            '--clock-jitter=0',        # Reduzir jitter
+            '--clock-synchro=0',       # Sincronização precisa
+            '--live-caching=50',       # Reduzir buffer live
+            '--network-caching=50',    # Reduzir buffer de rede
+            '--file-caching=50',       # Reduzir buffer de arquivo
+            '--disc-caching=50',       # Reduzir buffer de disco
+            '--sout-mux-caching=50',   # Reduzir buffer de muxing
+            '--high-priority',         # Alta prioridade
         ])
+        
+        if not self.instance:
+            raise RuntimeError("Não foi possível inicializar o VLC")
+            
         self.player = self.instance.media_player_new()
+        if not self.player:
+            raise RuntimeError("Não foi possível criar o media player")
         
         # Configurar o widget de exibição
         if isinstance(display_widget, (QFrame, QWidget)):
@@ -39,30 +40,31 @@ class VLCPlayer:
         """Carrega um arquivo de mídia"""
         try:
             media = self.instance.media_new(str(file_path))
-            # Configurar opções de mídia para melhor performance
+            
+            # Configurações otimizadas e compatíveis
+            options = [
+                ':clock-jitter=0',
+                ':clock-synchro=0',
+                ':live-caching=50',
+                ':network-caching=50',
+                ':sout-mux-caching=50',
+            ]
+            
+            # Adicionar otimizações específicas do Windows
             if sys.platform == "win32":
-                # Otimizações específicas para Windows
-                media.add_option(':avcodec-hw=dxva2')  # DirectX Video Acceleration
-                media.add_option(':d3d11-hw-device=1')  # Direct3D 11
-            else:
-                media.add_option(':avcodec-hw=any')
-
-            # Otimizações gerais
-            media.add_option(':avcodec-fast')    # Decodificação rápida
-            media.add_option(':avcodec-dr')      # Direct rendering
-            media.add_option(':audio-pitch-compensation')  # Manter pitch do áudio
-            media.add_option(':audio-time-stretch')  # Esticar áudio sem mudar pitch
-            media.add_option(':clock-jitter=0')   # Reduzir jitter
-            media.add_option(':clock-synchro=0')  # Sincronização precisa
-            media.add_option(':vout-filter=deinterlace')  # Desentrelaçamento
-            media.add_option(':deinterlace-mode=blend')  # Modo de desentrelaçamento
-            media.add_option(':live-caching=50')  # Reduzir buffer
-            media.add_option(':network-caching=50')  # Reduzir buffer de rede
-            media.add_option(':sout-mux-caching=50')  # Reduzir buffer de muxing
+                options.extend([
+                    ':avcodec-hw=any',
+                    ':avcodec-threads=0'
+                ])
+            
+            # Aplicar todas as opções
+            for option in options:
+                media.add_option(option)
             
             # Aplicar mídia ao player
             self.player.set_media(media)
             return True
+            
         except Exception as e:
             print(f"Erro ao carregar mídia: {e}")
             return False
@@ -88,24 +90,9 @@ class VLCPlayer:
         return self.player.get_position()
 
     def set_rate(self, rate):
-        """Define a velocidade de reprodução mantendo o pitch"""
+        """Define a velocidade de reprodução"""
         try:
-            if rate != 1.0:
-                # Configurar compensação de pitch antes de alterar a velocidade
-                media = self.player.get_media()
-                media.add_option(':audio-pitch-compensation')
-                media.add_option(':audio-time-stretch')
-                
-                # Otimizar parâmetros para diferentes velocidades
-                if rate < 1.0:
-                    # Configurações para reprodução lenta
-                    self.player.set_rate(rate)
-                else:
-                    # Configurações para reprodução rápida
-                    self.player.set_rate(rate)
-            else:
-                # Resetar para configurações normais
-                self.player.set_rate(1.0)
+            self.player.set_rate(rate)
             return True
         except Exception as e:
             print(f"Erro ao definir velocidade: {e}")

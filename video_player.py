@@ -1,46 +1,13 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                           QSlider, QLabel, QStyle, QFrame, QSizePolicy, QMessageBox)
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSize
+                           QSlider, QLabel, QStyle, QFrame, QSizePolicy)
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSize 
 from PyQt5.QtGui import QImage, QPixmap
-from pathlib import Path
-import time
 import sys
 import os
-import ctypes
-import traceback  # Added traceback import
-
-def initialize_vlc():
-    """Initialize VLC with proper path handling"""
-    try:
-        # Common VLC installation paths for Windows
-        vlc_paths = [
-            'C:/Program Files/VideoLAN/VLC',
-            'C:/Program Files (x86)/VideoLAN/VLC',
-        ]
-        
-        # Add VLC path to system PATH
-        vlc_found = False
-        for vlc_path in vlc_paths:
-            if os.path.exists(vlc_path):
-                # Verificar se libvlc.dll existe
-                if os.path.exists(os.path.join(vlc_path, 'libvlc.dll')):
-                    os.environ['PATH'] = vlc_path + ';' + os.environ['PATH']
-                    if hasattr(os, 'add_dll_directory'):
-                        os.add_dll_directory(vlc_path)
-                    vlc_found = True
-                    break
-
-        if not vlc_found:
-            raise Exception("VLC não encontrado. Por favor, instale o VLC em seu sistema.")
-
-        import vlc
-        return vlc
-    except Exception as e:
-        print(f"Erro ao inicializar VLC: {e}")
-        return None
-
-# Try to initialize VLC
-vlc = initialize_vlc()
+import time
+import traceback
+from pathlib import Path
+from video_editor.vlc_player import VLCPlayer
 
 def load_stylesheet(filename):
     """Carrega arquivo CSS"""
@@ -58,38 +25,12 @@ class VideoPlayer(QFrame):
         self.setFrameStyle(QFrame.Panel | QFrame.Sunken)
         self.player = None
         self.is_playing = False
-        
-        if (vlc is None):
-            self.show_vlc_error()
-            return
-            
-        try:
-            self.vlc_instance = vlc.Instance([
-                '--no-xlib',
-                '--quiet',
-                '--no-audio-time-stretch',
-                '--clock-synchro=0',
-                '--no-snapshot-preview',
-                '--live-caching=50',
-                '--file-caching=50',
-                '--disc-caching=50',
-                '--network-caching=50',
-                '--sout-mux-caching=50'
-            ])
-        except Exception as e:
-            print(f"Erro ao criar instância VLC: {e}")
-            self.show_vlc_error()
-            return
+        self.duration = 0
         
         # Carregar stylesheet
         self.setStyleSheet(load_stylesheet('video_player.css'))
         
         self.setup_ui()
-        
-        # Timer para atualização do vídeo
-        self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self.update_progress)
-        self.update_timer.setInterval(30)  # ~30 FPS
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -201,21 +142,6 @@ class VideoPlayer(QFrame):
         self.volume_slider.valueChanged.connect(self.set_volume)
         self.mute_button.clicked.connect(self.toggle_mute)
 
-    def show_vlc_error(self):
-        """Show error message when VLC is not available"""
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Critical)
-        msg.setWindowTitle("Erro - VLC não encontrado")
-        msg.setText("O VLC Media Player não foi encontrado no sistema.")
-        msg.setInformativeText("Por favor, siga os passos abaixo:\n\n"
-                             "1. Baixe o VLC de videolan.org\n"
-                             "2. Instale o VLC de 64 bits\n"
-                             "3. Certifique-se de que a instalação foi concluída\n"
-                             "4. Reinicie este aplicativo\n\n"
-                             "Nota: Certifique-se de instalar a versão de 64 bits do VLC.")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
-
     def load_video(self, video_path):
         try:
             print(f"Carregando vídeo: {video_path}")
@@ -223,78 +149,54 @@ class VideoPlayer(QFrame):
             if self.player:
                 self.player.stop()
                 self.player.release()
+            
+            self.player = VLCPlayer(self.video_widget)
+            success = self.player.load(video_path)
+            
+            if success:
+                # Obter duração do vídeo
+                self.duration = self.player.get_length() / 1000.0  # ms para segundos
                 
-            media = self.vlc_instance.media_new(str(video_path))
-            self.player = self.vlc_instance.media_player_new()
-            self.player.set_media(media)
+                # Configurar slider
+                self.position_slider.setRange(0, int(self.duration * 1000))
+                self.position_slider.setSingleStep(1000)
+                self.position_slider.setPageStep(5000)
+                
+                # Atualizar label de duração
+                self.time_label.setText(f"00:00 / {self.format_time(self.duration * 1000)}")
+                
+                # Reconectar sinais
+                self.play_button.clicked.connect(self.toggle_play)
+                self.stop_button.clicked.connect(self.stop)
+                self.position_slider.sliderMoved.connect(self.set_position)
+                self.volume_slider.valueChanged.connect(self.set_volume)
+                
+                # Configurar volume inicial
+                initial_volume = 50
+                self.volume_slider.setValue(initial_volume)
+                self.set_volume(initial_volume)
+                
+                # Definir taxa de reprodução padrão
+                self.player.set_rate(1.0)
+                
+                # Habilitar controles
+                self.play_button.setEnabled(True)
+                self.stop_button.setEnabled(True)
+                self.position_slider.setEnabled(True)
+                self.volume_slider.setEnabled(True)
+                
+                # Inicializar estado
+                self.is_playing = False
+                
+                return True
             
-            # Configurar o player para usar o widget de display
-            if sys.platform.startswith('linux'):
-                self.player.set_xwindow(self.video_widget.winId())
-            elif sys.platform == "win32":
-                self.player.set_hwnd(self.video_widget.winId())
-            elif sys.platform == "darwin":
-                self.player.set_nsobject(int(self.video_widget.winId()))
-            
-            # Otimizações para melhor performance usando opções de mídia
-            media.add_option(':avcodec-hw=any')  # Usar aceleração de hardware
-            media.add_option(':avcodec-fast')    # Modo rápido de decodificação
-            media.add_option(':avcodec-dr')      # Direct rendering
-            media.add_option(':audio-pitch-compensation')  # Manter pitch do áudio
-            media.add_option(':audio-time-stretch')  # Esticar áudio sem mudar pitch
-            media.add_option(':clock-jitter=0')   # Reduzir jitter
-            media.add_option(':clock-synchro=0')  # Sincronização precisa
-            media.add_option(':no-snapshot-preview')  # Desabilitar preview
-            media.add_option(':live-caching=50')  # Reduzir buffer
-            media.add_option(':network-caching=50')  # Reduzir buffer de rede
-            media.add_option(':sout-mux-caching=50')  # Reduzir buffer de muxing
-            
-            # Obter duração do vídeo
-            media.parse()
-            self.duration = media.get_duration() / 1000.0  # Converter ms para segundos
-            
-            # Configurar slider
-            self.position_slider.setRange(0, int(self.duration * 1000))
-            self.position_slider.setSingleStep(1000)  # 1 segundo por step
-            self.position_slider.setPageStep(5000)    # 5 segundos por page
-            
-            # Atualizar label de duração
-            self.time_label.setText(f"00:00 / {self.format_time(self.duration)}")
-            
-            # Desconectar sinais antigos se existirem
-            try:
-                self.play_button.clicked.disconnect()
-                self.stop_button.clicked.disconnect()
-            except:
-                pass
-            
-            # Reconectar sinais
-            self.play_button.clicked.connect(self.toggle_play)
-            self.stop_button.clicked.connect(self.stop)
-            self.position_slider.sliderMoved.connect(self.set_position)
-            
-            # Habilitar controles
-            self.play_button.setEnabled(True)
-            self.stop_button.setEnabled(True)
-            
-            # Inicializar estado
-            self.is_playing = False
-            
-            print("Vídeo carregado com sucesso")
-            
+            print("Erro ao carregar vídeo")
+            return False
+                
         except Exception as e:
             print(f"Erro ao carregar vídeo: {e}")
-            import traceback
             traceback.print_exc()
-            self.duration = 0
-            self.position_slider.setRange(0, 0)
-
-    def update_progress(self):
-        if self.player and self.player.is_playing():
-            current_time = self.player.get_time() / 1000.0  # Converter ms para segundos
-            if not self.position_slider.isSliderDown():
-                self.position_slider.setValue(int(current_time * 1000))
-                self.time_label.setText(f"{self.format_time(current_time)} / {self.format_time(self.duration)}")
+            return False
 
     def toggle_play(self):
         if not self.player:
@@ -302,18 +204,13 @@ class VideoPlayer(QFrame):
             
         try:
             if self.is_playing:
-                print("Pausando...")
                 self.player.pause()
                 self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
-                self.update_timer.stop()
             else:
-                print("Reproduzindo...")
                 self.player.play()
                 self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
-                self.update_timer.start()
             
             self.is_playing = not self.is_playing
-            print(f"Estado de reprodução: {'Reproduzindo' if self.is_playing else 'Pausado'}")
             
         except Exception as e:
             print(f"Erro ao alternar reprodução: {e}")
@@ -327,17 +224,14 @@ class VideoPlayer(QFrame):
             self.player.stop()
             self.is_playing = False
             self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
-            self.update_timer.stop()
             
             # Voltar ao início
             self.player.set_time(0)
-            time.sleep(0.1)  # Pequena pausa para garantir que o seek foi completado
             
             # Forçar atualização da posição
             self.position_slider.setValue(0)
-            self.time_label.setText(f"00:00 / {self.format_time(self.duration)}")
+            self.update_time_label(0)
             
-            print("Reprodução parada e resetada")
         except Exception as e:
             print(f"Erro ao parar reprodução: {e}")
             traceback.print_exc()
@@ -347,27 +241,9 @@ class VideoPlayer(QFrame):
             return
             
         try:
-            # Converter milissegundos para proporção (0-1)
-            pos_ratio = position / (self.duration * 1000)
-            
-            # Garantir que a posição está dentro dos limites
-            pos_ratio = max(0, min(pos_ratio, 1))
-            
-            # Pausar temporariamente
-            was_playing = self.is_playing
-            if was_playing:
-                self.player.pause()
-            
-            # Aplicar seek
-            self.player.set_position(pos_ratio)
-            
-            # Atualizar interface
-            current_time = position / 1000.0
-            self.time_label.setText(f"{self.format_time(current_time)} / {self.format_time(self.duration)}")
-            
-            # Retomar reprodução se estava reproduzindo
-            if was_playing:
-                self.player.play()
+            time_ms = position
+            self.player.set_time(time_ms)
+            self.update_time_label(position)
             
         except Exception as e:
             print(f"Erro ao definir posição: {e}")
@@ -376,20 +252,30 @@ class VideoPlayer(QFrame):
     def set_volume(self, value):
         if self.player:
             try:
-                # VLC espera volume entre 0 e 100
-                self.player.audio_set_volume(value)
+                # Usar diretamente o método do VLCPlayer
+                self.player.player.audio_set_volume(value)
+                # Atualizar ícone do botão mudo
+                self.mute_button.setIcon(
+                    self.style().standardIcon(
+                        QStyle.SP_MediaVolumeMuted if value == 0 else QStyle.SP_MediaVolume
+                    )
+                )
             except Exception as e:
                 print(f"Erro ao definir volume: {e}")
 
     def toggle_mute(self):
         if self.player:
             try:
-                is_muted = self.player.audio_get_mute()
-                self.player.audio_set_mute(not is_muted)
-                if not is_muted:
+                current_volume = self.volume_slider.value()
+                if current_volume > 0:
+                    self.last_volume = current_volume
+                    self.volume_slider.setValue(0)
                     self.mute_button.setIcon(self.style().standardIcon(QStyle.SP_MediaVolumeMuted))
                 else:
+                    restore_volume = getattr(self, 'last_volume', 50)
+                    self.volume_slider.setValue(restore_volume)
                     self.mute_button.setIcon(self.style().standardIcon(QStyle.SP_MediaVolume))
+                
             except Exception as e:
                 print(f"Erro ao alternar mudo: {e}")
                 traceback.print_exc()
@@ -403,23 +289,26 @@ class VideoPlayer(QFrame):
                 print(f"Erro ao fechar player: {e}")
         super().closeEvent(event)
 
-    def format_time(self, seconds):
-        """Converte segundos em formato MM:SS"""
+    def update_time_label(self, position):
+        if not self.player:
+            return
         try:
-            m = int(seconds // 60)
-            s = int(seconds % 60)
-            return f"{m:02d}:{s:02d}"
+            current_time = position
+            total_time = int(self.duration * 1000)
+            current = self.format_time(current_time)
+            total = self.format_time(total_time)
+            self.time_label.setText(f"{current} / {total}")
+        except Exception as e:
+            print(f"Erro ao atualizar label de tempo: {e}")
+
+    def format_time(self, ms):
+        """Converte milissegundos em formato MM:SS"""
+        try:
+            ms = float(ms) if ms else 0
+            s = int(ms // 1000)
+            m = int(s // 60)
+            s = int(s % 60)
+            return f"{int(m):02d}:{int(s):02d}"
         except Exception as e:
             print(f"Erro ao formatar tempo: {e}")
             return "00:00"
-
-    def set_playback_speed(self, speed):
-        if self.player:
-            try:
-                media = self.player.get_media()
-                # Configurar compensação de pitch antes de alterar a velocidade
-                media.add_option(':audio-pitch-compensation')
-                media.add_option(':audio-time-stretch')
-                self.player.set_rate(speed)
-            except Exception as e:
-                print(f"Erro ao definir velocidade: {e}")
