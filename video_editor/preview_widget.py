@@ -273,6 +273,44 @@ class PreviewWidget(QFrame):
             print(f"Erro ao alterar velocidade: {e}")
             return False
 
+    def start_fast_forward(self):
+        """Inicia avanço rápido"""
+        try:
+            if self.player:
+                # Salvar velocidade atual
+                self.previous_speed = self.playback_speed
+                # Definir velocidade rápida (2x mais rápido que a velocidade atual)
+                self.set_playback_speed(self.playback_speed * 2.0)
+                if not self.is_playing:
+                    self.play()
+        except Exception as e:
+            print(f"Erro ao iniciar avanço rápido: {e}")
+
+    def start_rewind(self):
+        """Inicia retrocesso rápido"""
+        try:
+            if self.player:
+                # Salvar velocidade atual
+                self.previous_speed = self.playback_speed
+                # Definir velocidade negativa para retroceder
+                self.set_playback_speed(-2.0)
+                if not self.is_playing:
+                    self.play()
+        except Exception as e:
+            print(f"Erro ao iniciar retrocesso: {e}")
+
+    def stop_fast_playback(self):
+        """Para avanço/retrocesso rápido"""
+        try:
+            if self.player:
+                # Restaurar velocidade anterior
+                if hasattr(self, 'previous_speed'):
+                    self.set_playback_speed(self.previous_speed)
+                else:
+                    self.set_playback_speed(1.0)
+        except Exception as e:
+            print(f"Erro ao parar reprodução rápida: {e}")
+
     def closeEvent(self, event):
         """Evento de fechamento"""
         if self.player:
