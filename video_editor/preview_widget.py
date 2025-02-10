@@ -258,6 +258,21 @@ class PreviewWidget(QFrame):
             except Exception as e:
                 print(f"Erro ao atualizar frame: {e}")
 
+    def set_playback_speed(self, speed):
+        """Define a velocidade de reprodução do vídeo"""
+        try:
+            if self.player and speed > 0:
+                print(f"Alterando velocidade para: {speed}x")
+                success = self.player.set_rate(float(speed))
+                if success:
+                    self.playback_speed = speed
+                    return True
+                print("Falha ao alterar velocidade")
+            return False
+        except Exception as e:
+            print(f"Erro ao alterar velocidade: {e}")
+            return False
+
     def closeEvent(self, event):
         """Evento de fechamento"""
         if self.player:

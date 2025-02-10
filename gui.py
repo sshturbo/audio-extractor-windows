@@ -455,11 +455,11 @@ class MainWindow(QMainWindow):
     def open_editor(self):
         """Abre o editor de vídeo com o projeto atual"""
         if self.current_project:
-            video_file = Path(self.current_project['video_file'])
+            video_file = Path(self.current_project['original_video'])
             audio_file = Path(self.current_project['audio_file'])
             
             if video_file.exists() and audio_file.exists():
-                self.editor = VideoEditor(str(video_file), str(audio_file))
+                self.editor = ClipchampEditor(self.current_project)
                 self.editor.show()
             else:
                 QMessageBox.warning(self, "Aviso", "Arquivos de vídeo ou áudio não encontrados.")
