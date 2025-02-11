@@ -132,9 +132,35 @@ class MainWindow(QMainWindow):
 
         file_layout.addLayout(select_layout)
 
+        # Configuração melhorada do combo de idiomas
+        language_group = QGroupBox("Idioma Alvo")
+        language_layout = QVBoxLayout(language_group)
+        
         self.language_combo = QComboBox()
-        self.language_combo.addItems(["pt", "en", "es", "fr", "de"])
-        file_layout.addWidget(self.language_combo)
+        languages = [
+            ("Português", "pt"),
+            ("English", "en"),
+            ("日本語", "ja"),
+            ("中文", "zh"),
+            ("한국어", "ko"),
+            ("Español", "es"),
+            ("Français", "fr"),
+            ("Deutsch", "de"),
+            ("Italiano", "it"),
+            ("Русский", "ru")
+        ]
+        
+        for display_name, code in languages:
+            self.language_combo.addItem(display_name, code)
+        
+        self.language_combo.setCurrentText("Português")  # Português como padrão
+        language_layout.addWidget(self.language_combo)
+        
+        language_hint = QLabel("Selecione o idioma para a tradução final")
+        language_hint.setStyleSheet("color: #666; font-style: italic;")
+        language_layout.addWidget(language_hint)
+
+        file_layout.addWidget(language_group)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -223,7 +249,14 @@ class MainWindow(QMainWindow):
             self.select_button.setEnabled(False)
             self.progress_bar.setVisible(True)
 
-            self.worker = AudioProcessingWorker(self.selected_video, self.language_combo.currentText())
+            # Pegar o código do idioma do item atual
+            selected_language = self.language_combo.currentData()  # Isso retornará o código (pt, en, etc)
+            if not selected_language:
+                selected_language = "pt"  # Fallback para português se não houver dado
+            
+            print(f"Idioma selecionado para transcrição: {selected_language}")
+
+            self.worker = AudioProcessingWorker(self.selected_video, selected_language)
             self.worker.progress.connect(self.update_progress)
             self.worker.finished.connect(self.on_processing_finished)
             self.worker.error.connect(self.on_error)

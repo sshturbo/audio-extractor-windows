@@ -2,6 +2,7 @@ import ffmpeg
 import os
 from pathlib import Path
 import uuid
+import subprocess
 
 def create_project_dirs(video_file):
     """Cria estrutura de diretórios do projeto"""
@@ -15,7 +16,6 @@ def create_project_dirs(video_file):
     segments_dir = base_dir / 'segments'
     transcripts_dir = base_dir / 'transcripts'
     original_dir = base_dir / 'original'
-    video_no_audio_dir = base_dir / 'video_no_audio'
     
     for dir_path in [segments_dir, transcripts_dir, original_dir]:
         dir_path.mkdir(parents=True, exist_ok=True)
@@ -27,7 +27,7 @@ def create_project_dirs(video_file):
     if not original_video.exists():
         from shutil import copy2
         copy2(video_file, original_video)  # Copia mantendo o áudio original
-    
+        
     return str(segments_dir), str(transcripts_dir), str(original_video), project_id
 
 def extract_audio(video_file):
@@ -39,21 +39,30 @@ def extract_audio(video_file):
         audio_file = str(Path(segments_dir) / 'full_audio.wav')
         
         try:
-            # Primeiro extrair o áudio em WAV 16kHz mono do vídeo original
-            stream_audio = ffmpeg.input(video_file)  # Usar vídeo original
-            stream_audio = ffmpeg.output(
-                stream_audio,
-                audio_file,
-                acodec='pcm_s16le',
-                ac=1,
-                ar='16k',
-                vn=None,
-                loglevel='error'
-            )
-            ffmpeg.run(stream_audio, overwrite_output=True)
+            # Usar subprocess diretamente para mais controle
+            command = [
+                'ffmpeg', '-i', video_file,
+                '-vn',  # No video
+                '-acodec', 'pcm_s16le',  # WAV format
+                '-ac', '1',  # Mono
+                '-ar', '16000',  # 16kHz
+                '-y',  # Overwrite output
+                audio_file
+            ]
             
-        except ffmpeg.Error as e:
-            raise Exception(f"Erro FFmpeg: {e.stderr.decode()}")
+            # Executar comando ffmpeg
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True
+            )
+            
+            if result.returncode != 0:
+                raise Exception(f"FFmpeg error: {result.stderr}")
+            
+        except Exception as e:
+            raise Exception(f"Error extracting audio: {str(e)}")
         
         return {
             'audio_file': audio_file,
