@@ -1,9 +1,11 @@
 import os
 import sys
+from pathlib import Path
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import Qt, QCoreApplication
-from gui import MainWindow
-from models_handler import download_silero_model
+from src.gui.gui import MainWindow
+from src.models.models_handler import download_silero_model
+from src.worker import init as init_dirs
 import signal
 
 def signal_handler(signum, frame):
@@ -24,6 +26,9 @@ def check_vlc():
 def main():
     if not check_vlc():
         sys.exit(1)
+
+    # Inicializar estrutura de diretórios
+    init_dirs()
 
     # Garantir que o modelo está baixado antes de iniciar
     download_silero_model()

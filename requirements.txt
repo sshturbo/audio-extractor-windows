@@ -5,13 +5,12 @@ PyQt5>=5.15.0
 PyQt5-Qt5==5.15.2
 PyQt5-sip==12.17.0
 PyQt5-tools==5.15.9.3.3
-numpy>=1.19.0
+numpy>=1.19.5
 scipy==1.10.1
-soundfile>=0.10.0
+soundfile>=0.10.3
 scikit-learn==1.6.1
 torch>=2.0.0
 torchaudio==2.6.0
-ffpyplayer>=4.3.5
 av>=10.0.0
 opencv-python>=4.5.0
 python-vlc>=3.0.0
@@ -21,3 +20,19 @@ sentencepiece>=0.1.99
 sacremoses>=0.0.53
 requests>=2.31.0
 psutil>=5.9.0
+openai-whisper==20240930
+openai==1.61.1
+timeout-decorator
+pytesseract>=0.3.13  # Para OCR
+Pillow>=11.1.0 
+autosub==0.3.12
+langdetect==1.0.9
+SpeechRecognition==3.14.1
+fastapi>=0.68.0
+uvicorn>=0.15.0
+python-multipart>=0.0.5
+requests>=2.26.0
+whisper>=1.0.0
+librosa>=0.8.1
+googletrans==3.1.0a0
+pydantic>=1.8.0
